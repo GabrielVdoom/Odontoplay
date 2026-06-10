@@ -1,0 +1,34 @@
+{
+  "expo": {
+    "name": "Odontoplay",
+    "slug": "odontoplay",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/shared/logo_odontoplay.png",
+    "userInterfaceStyle": "light",
+    "newArchEnabled": true,
+    "splash": {
+      "image": "./assets/splash/splash.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#ffffff"
+    },
+    "ios": {
+      "supportsTablet": true
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/shared/logo_odontoplay.png",
+        "backgroundColor": "#ffffff"
+      },
+      "edgeToEdgeEnabled": true,
+      "softwareKeyboardLayoutMode": "resize"
+    },
+    "web": {
+      "favicon": "./assets/shared/logo_odontoplay.png"
+    },
+    "plugins": [
+      "expo-asset",
+      "expo-font"
+    ]
+  }
+}
