@@ -2,7 +2,6 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import {
   Animated,
   BackHandler,
-  Dimensions,
   Image,
   ImageBackground,
   ImageSourcePropType,
@@ -25,6 +24,7 @@ import {
 } from "../contexts/ThemeMusicContext";
 import { preloadConsultorioImages } from "../services/imagePreload";
 import { saveGameProgress } from "../services/progress";
+import { getScreenMetrics } from "../utils/responsive";
 
 type Props = NativeStackScreenProps<RootStackParamList, "Consultorio">;
 
@@ -40,7 +40,12 @@ type Jogo1Objeto = {
 type ConsultorioCharacter = "menino" | "menina";
 
 const instrumentTargetPosition = { left: 100, top: 342 };
-const { width: screenWidth, height: screenHeight } = Dimensions.get("window");
+const {
+  width: screenWidth,
+  height: screenHeight,
+  scale: s,
+  moderateScale: ms,
+} = getScreenMetrics();
 const friendlyTextFont = Platform.select({
   android: "sans-serif-rounded",
   ios: "Avenir Next",
@@ -917,12 +922,16 @@ export default function ConsultorioScreen({ navigation }: Props) {
                       <Text
                         style={styles.lessonPrimaryButtonText}
                         numberOfLines={1}
+                        adjustsFontSizeToFit
+                        minimumFontScale={0.78}
                       >
                         {"Mostrar na prática!"}
                       </Text>
                       <Text
                         style={styles.lessonPrimaryButtonSubtext}
                         numberOfLines={1}
+                        adjustsFontSizeToFit
+                        minimumFontScale={0.78}
                       >
                         Vamos ver como funciona
                       </Text>
@@ -966,7 +975,14 @@ export default function ConsultorioScreen({ navigation }: Props) {
                       style={styles.lessonPrimaryButtonLeftIcon}
                     />
                     <View style={styles.lessonPrimaryButtonCopy}>
-                      <Text style={styles.lessonPrimaryButtonEntendiText}>Entendi!</Text>
+                      <Text
+                        style={styles.lessonPrimaryButtonEntendiText}
+                        numberOfLines={1}
+                        adjustsFontSizeToFit
+                        minimumFontScale={0.8}
+                      >
+                        Entendi!
+                      </Text>
                     </View>
                     <Ionicons
                       name="chevron-forward"
@@ -1008,7 +1024,14 @@ export default function ConsultorioScreen({ navigation }: Props) {
                     end={{ x: 1, y: 1 }}
                     style={styles.successButtonGradient}
                   >
-                    <Text style={styles.successButtonText}>Continuar</Text>
+                    <Text
+                      style={styles.successButtonText}
+                      numberOfLines={1}
+                      adjustsFontSizeToFit
+                      minimumFontScale={0.8}
+                    >
+                      Continuar
+                    </Text>
                     <Ionicons
                       name="chevron-forward"
                       size={25}
@@ -1125,7 +1148,14 @@ export default function ConsultorioScreen({ navigation }: Props) {
                   end={{ x: 0, y: 1 }}
                   style={styles.instructionsButtonGradient}
                 >
-                  <Text style={styles.instructionsButtonText}>Começar</Text>
+                  <Text
+                    style={styles.instructionsButtonText}
+                    numberOfLines={1}
+                    adjustsFontSizeToFit
+                    minimumFontScale={0.8}
+                  >
+                    Começar
+                  </Text>
                   <Ionicons
                     name="chevron-forward"
                     size={28}
@@ -1200,7 +1230,14 @@ export default function ConsultorioScreen({ navigation }: Props) {
                 end={{ x: 0, y: 1 }}
                 style={styles.characterContinueGradient}
               >
-                <Text style={styles.characterContinueText}>Começar</Text>
+                <Text
+                  style={styles.characterContinueText}
+                  numberOfLines={1}
+                  adjustsFontSizeToFit
+                  minimumFontScale={0.8}
+                >
+                  Começar
+                </Text>
                 <Ionicons
                   name="chevron-forward"
                   size={21}
@@ -1899,12 +1936,14 @@ const styles = StyleSheet.create({
     fontFamily: "Nunito_800ExtraBold",
     color: "#FFFFFF",
     fontSize: 19,
+    lineHeight: 24,
     fontWeight: "900",
     textShadowColor: "rgba(4, 68, 123, 0.45)",
     textShadowOffset: { width: 0, height: 2 },
     textShadowRadius: 2,
     width: "100%",
     textAlign: "center",
+    includeFontPadding: false,
   },
   background: {
     flex: 1,
@@ -1924,22 +1963,22 @@ const styles = StyleSheet.create({
   },
   exitButton: {
     position: "absolute",
-    top: 44,
-    right: 18,
+    top: s(44),
+    right: s(18),
     zIndex: 10,
   },
   exitButtonImage: {
-    width: 120,
-    height: 100,
+    width: s(120),
+    height: s(100),
     resizeMode: "contain",
   },
   backIconButton: {
     position: "absolute",
-    top: 48,
-    left: 18,
-    width: 42,
-    height: 42,
-    borderRadius: 21,
+    top: s(48),
+    left: s(18),
+    width: s(42),
+    height: s(42),
+    borderRadius: s(21),
     backgroundColor: "rgba(5, 47, 121, 0.52)",
     borderWidth: 1,
     borderColor: "rgba(205, 237, 255, 0.5)",
@@ -1954,69 +1993,69 @@ const styles = StyleSheet.create({
   },
   dentistaWrapper: {
     position: "absolute",
-    left: 18,
-    bottom: 184,
+    left: s(18),
+    bottom: s(184),
     zIndex: 4,
   },
   dentistaInicial: {
-    top: 130,
-    right: -60,
+    top: s(130),
+    right: s(-60),
     bottom: 0,
-    width: 280,
-    height: 435,
+    width: s(280),
+    height: s(435),
     resizeMode: "contain",
     zIndex: 1,
   },
   dentistaInicialGirl: {
-    top: 142,
+    top: s(142),
   },
   dentistaExplicando: {
-    top: -15,
-    left: 135,
-    width: 300,
-    height: 435,
+    top: s(-15),
+    left: s(135),
+    width: s(300),
+    height: s(435),
     resizeMode: "contain",
   },
   instrumentBubble: {
     position: "absolute",
-    left: 10,
-    top: 96,
-    width: 300,
-    height: 200,
+    left: s(10),
+    top: s(96),
+    width: s(300),
+    height: s(200),
     zIndex: 7,
     alignItems: "center",
     justifyContent: "center",
   },
   nextInstrumentBubble: {
-    height: 158,
+    height: s(158),
   },
   instrumentBubbleImage: {
     position: "absolute",
-    width: 320,
-    height: 200,
+    width: s(320),
+    height: s(200),
     resizeMode: "stretch",
     transform: [{ scaleX: -1 }],
   },
   nextInstrumentBubbleImage: {
-    height: 158,
+    height: s(158),
   },
   instrumentBubbleTextBox: {
-    width: 248,
-    minHeight: 132,
-    marginTop: -12,
-    marginLeft: -6,
+    width: s(248),
+    minHeight: s(132),
+    marginTop: s(-12),
+    marginLeft: s(-6),
     alignItems: "center",
     justifyContent: "center",
   },
   nextInstrumentBubbleTextBox: {
-    marginTop: -22,
+    marginTop: s(-22),
   },
   initialInstrumentBubbleText: {
-    marginTop: -5,
+    marginTop: s(-5),
     fontFamily: "Nunito_800ExtraBold",
     color: "#374255",
-    fontSize: 19,
-    lineHeight: 26,
+    fontSize: ms(19),
+    lineHeight: ms(26),
     fontWeight: "900",
     textAlign: "center",
     includeFontPadding: false,
@@ -2034,8 +2073,8 @@ const styles = StyleSheet.create({
   nextInstrumentBubbleTitle: {
     fontFamily: "Nunito_800ExtraBold",
     color: "#374255",
-    fontSize: 20,
-    lineHeight: 29,
+    fontSize: ms(20),
+    lineHeight: ms(29),
     fontWeight: "900",
     textAlign: "center",
     includeFontPadding: false,
@@ -2045,34 +2084,34 @@ const styles = StyleSheet.create({
   },
   floorPanelWrapper: {
     position: "absolute",
-    left: 14,
-    right: 13,
-    bottom: 65,
-    height: 290,
+    left: s(20),
+    right: s(13),
+    bottom: s(65),
+    height: s(290),
     zIndex: 6,
+    overflow: "visible",
   },
   floorPanel: {
     flex: 1,
-    paddingHorizontal: 14,
-    paddingVertical: 16,
+    paddingHorizontal: s(24),
+    paddingVertical: s(16),
     flexDirection: "row",
     alignItems: "flex-end",
     justifyContent: "space-between",
   },
   floorPanelImage: {
     resizeMode: "stretch",
-    width:600,
-    height:430,
-    left:-120,
-    
+    width: s(600),
+    height: s(430),
+    left: s(-120),
   },
   instrumentButton: {
     alignItems: "center",
     justifyContent: "flex-end",
   },
   instrumentoItem: {
-    width: 60,
-    height: 140,
+    width: s(60),
+    height: s(143),
     resizeMode: "contain",
   },
   lessonOverlay: {
@@ -2297,6 +2336,7 @@ const styles = StyleSheet.create({
     fontWeight: "900",
     width: "100%",
     textAlign: "center",
+    includeFontPadding: false,
     textShadowColor: "rgba(18, 18, 110, 0.45)",
     textShadowOffset: { width: 0, height: 2 },
     textShadowRadius: 3,
@@ -2308,6 +2348,7 @@ const styles = StyleSheet.create({
     fontWeight: "900",
     width: "100%",
     textAlign: "center",
+    includeFontPadding: false,
     textShadowColor: "rgba(18, 18, 110, 0.45)",
     textShadowOffset: { width: 0, height: 2 },
     textShadowRadius: 3,
@@ -2320,6 +2361,7 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     width: "100%",
     textAlign: "center",
+    includeFontPadding: false,
   },
   lessonInstrumentTitle: {
     color: "#0A4CB3",
@@ -2485,6 +2527,7 @@ const styles = StyleSheet.create({
     fontWeight: "900",
     width: "100%",
     textAlign: "center",
+    includeFontPadding: false,
     transform: [{ translateX: -9 }],
     textShadowColor: "rgba(28, 94, 16, 0.45)",
     textShadowOffset: { width: 0, height: 2 },
@@ -2733,7 +2776,11 @@ const styles = StyleSheet.create({
     fontFamily: friendlyBoldFont,
     color: "#FFFFFF",
     fontSize: 27,
+    lineHeight: 32,
     fontWeight: "900",
+    width: "100%",
+    textAlign: "center",
+    includeFontPadding: false,
     transform: [{ translateX: -8 }],
     textShadowColor: "rgba(33, 92, 18, 0.58)",
     textShadowOffset: { width: 0, height: 3 },

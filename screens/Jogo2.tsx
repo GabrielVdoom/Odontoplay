@@ -2,7 +2,6 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import {
   Animated,
   BackHandler,
-  Dimensions,
   Image,
   ImageBackground,
   ImageSourcePropType,
@@ -26,8 +25,9 @@ import {
   saveUserPreferences,
   UserPreferences,
 } from "../services/progress";
+import { getScreenMetrics } from "../utils/responsive";
 
-const { width, height } = Dimensions.get("window");
+const { width, height, scale: s, moderateScale: ms } = getScreenMetrics();
 
 const MOUTH_HITBOX = {
   x: width * 0.30,
@@ -604,7 +604,14 @@ export default function Jogo2Screen({ navigation }: Props) {
                 end={{ x: 0, y: 1 }}
                 style={styles.instructionsButtonGradient}
               >
-                <Text style={styles.instructionsButtonText}>Continuar</Text>
+                <Text
+                  style={styles.instructionsButtonText}
+                  numberOfLines={1}
+                  adjustsFontSizeToFit
+                  minimumFontScale={0.8}
+                >
+                  Continuar
+                </Text>
                 <Ionicons
                   name="chevron-forward"
                   size={21}
@@ -667,7 +674,14 @@ export default function Jogo2Screen({ navigation }: Props) {
                 end={{ x: 0, y: 1 }}
                 style={styles.characterContinueGradient}
               >
-                <Text style={styles.characterContinueText}>Começar</Text>
+                <Text
+                  style={styles.characterContinueText}
+                  numberOfLines={1}
+                  adjustsFontSizeToFit
+                  minimumFontScale={0.8}
+                >
+                  Começar
+                </Text>
                 <Ionicons
                   name="chevron-forward"
                   size={21}
@@ -968,24 +982,24 @@ const styles = StyleSheet.create({
 
   exitButton: {
     position: "absolute",
-    top: 48,
-    right: 18,
+    top: s(48),
+    right: s(18),
     zIndex: 40,
   },
 
   exitButtonImage: {
-    width: 120,
-    height: 100,
+    width: s(120),
+    height: s(100),
     resizeMode: "contain",
   },
 
   backIconButton: {
     position: "absolute",
-    top: 48,
-    left: 18,
-    width: 42,
-    height: 42,
-    borderRadius: 21,
+    top: s(48),
+    left: s(18),
+    width: s(42),
+    height: s(42),
+    borderRadius: s(21),
     backgroundColor: "rgba(5, 47, 121, 0.52)",
     borderWidth: 1,
     borderColor: "rgba(205, 237, 255, 0.5)",
@@ -1039,19 +1053,19 @@ const styles = StyleSheet.create({
     position: "absolute",
     left: 0,
     right: 0,
-    top: 94,
+    top: s(94),
     zIndex: 4,
     alignItems: "center",
   },
 
   characterStage: {
-    width: 345,
-    height: 610,
+    width: s(345),
+    height: s(610),
   },
 
   character: {
-    width: 345,
-    height: 610,
+    width: s(345),
+    height: s(610),
     resizeMode: "contain",
   },
 
@@ -1063,13 +1077,13 @@ const styles = StyleSheet.create({
 
   itemsPanel: {
     position: "absolute",
-    left: 14,
-    right: 10,
-    bottom: 65,
-    height: 180,
+    left: s(14),
+    right: s(10),
+    bottom: s(65),
+    height: s(180),
     zIndex: 6,
-    paddingHorizontal: 10,
-    paddingVertical: 14,
+    paddingHorizontal: s(10),
+    paddingVertical: s(14),
     alignItems: "center",
     justifyContent: "center",
   },
@@ -1099,7 +1113,7 @@ const styles = StyleSheet.create({
 
   gameFinishButtonArea: {
     position: "absolute",
-    bottom: 210,
+    bottom: s(210),
     left: 0,
     right: 0,
     alignItems: "center",
@@ -1107,15 +1121,15 @@ const styles = StyleSheet.create({
   },
 
   gameFinishButtonPressable: {
-    width: 150,
-    height: 150,
+    width: s(150),
+    height: s(150),
     alignItems: "center",
     justifyContent: "center",
   },
 
   gameFinishButton: {
-    width: 150,
-    height: 150,
+    width: s(150),
+    height: s(150),
     resizeMode: "contain",
   },
 
@@ -1131,11 +1145,11 @@ const styles = StyleSheet.create({
 
   finalTitle: {
     position: "absolute",
-    top: 82,
+    top: s(82),
     left: 0,
     right: 0,
     color: "#FFFFFF",
-    fontSize: 39,
+    fontSize: ms(39),
     fontWeight: "900",
     textAlign: "center",
     zIndex: 5,
@@ -1143,11 +1157,11 @@ const styles = StyleSheet.create({
 
   finalSubtitle: {
     position: "absolute",
-    top: 140,
+    top: s(140),
     left: "11%",
     width: "78%",
     color: "#FF79B4",
-    fontSize: 25,
+    fontSize: ms(25),
     fontWeight: "900",
     textAlign: "center",
     zIndex: 5,
@@ -1155,10 +1169,10 @@ const styles = StyleSheet.create({
 
   finalToothArea: {
     position: "absolute",
-    top: 200,
+    top: s(200),
     left: 0,
     right: 0,
-    height: 390,
+    height: s(390),
     alignItems: "center",
     justifyContent: "center",
     zIndex: 4,
@@ -1166,59 +1180,59 @@ const styles = StyleSheet.create({
 
   toothImage: {
     position: "absolute",
-    width: 820,
+    width: s(820),
     resizeMode: "contain",
   },
 
   toothText: {
     position: "absolute",
-    top: 80,
+    top: s(80),
     left: 0,
     right: 0,
     color: "#F6C400",
-    fontSize: 28,
+    fontSize: ms(28),
     fontWeight: "900",
     textAlign: "center",
     zIndex: 6,
   },
 
   starsImage: {
-    top:-30,
-    width: 250,
-    height: 150,
+    top: s(-30),
+    width: s(250),
+    height: s(150),
   },
 
   retryButtonBox: {
     position: "absolute",
-    top: 583,
+    top: s(583),
     left: 0,
     right: 0,
-    height: 74,
+    height: s(74),
     alignItems: "center",
     zIndex: 30,
     elevation: 30,
   },
 
   retryButton: {
-    width: 260,
-    height: 74,
+    width: s(260),
+    height: s(74),
     resizeMode: "contain",
   },
 
   finalExitButtonBox: {
     position: "absolute",
-    top: 675,
+    top: s(675),
     left: 0,
     right: 0,
-    height: 60,
+    height: s(60),
     alignItems: "center",
     zIndex: 10,
     elevation: 10,
   },
 
   sairButton: {                                          
-    width: 180,
-    height: 60,
+    width: s(180),
+    height: s(60),
     resizeMode: "contain",
   },
 
@@ -1228,20 +1242,20 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(17, 74, 121, 0.28)",
     alignItems: "center",
     justifyContent: "center",
-    paddingHorizontal: 28,
+    paddingHorizontal: s(28),
   },
 
   characterSelectionBox: {
     width: "93%",
-    maxWidth: 350,
-    height: 500,
-    padding: 10,
-    borderRadius: 28,
+    maxWidth: s(350),
+    height: s(500),
+    padding: s(10),
+    borderRadius: s(28),
     backgroundColor: "rgba(250, 254, 255, 0.98)",
     borderWidth: 2,
     borderColor: "#64B5F6",
-    paddingHorizontal: 16,
-    paddingVertical: 22,
+    paddingHorizontal: s(16),
+    paddingVertical: s(22),
     alignItems: "center",
     justifyContent: "flex-start",
     shadowColor: "#075B9C",
@@ -1256,28 +1270,28 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    gap: 10,
+    gap: s(10),
   },
 
   characterSelectionToothSlot: {
-    width: 44,
-    height: 44,
+    width: s(44),
+    height: s(44),
     alignItems: "center",
     justifyContent: "center",
     overflow: "visible",
   },
 
   characterSelectionTooth: {
-    width: 134,
-    height: 104,
+    width: s(134),
+    height: s(104),
     resizeMode: "contain",
   },
 
   characterSelectionTitle: {
     fontFamily: "Nunito_800ExtraBold",
     color: "#1557A7",
-    fontSize: 26,
-    lineHeight: 30,
+    fontSize: ms(26),
+    lineHeight: ms(30),
     fontWeight: "900",
     textAlign: "left",
     letterSpacing: 0.2,
@@ -1288,9 +1302,9 @@ const styles = StyleSheet.create({
 
   characterSelectionSubtitle: {
     fontFamily: "Nunito_800ExtraBold",
-    marginTop: 8,
+    marginTop: s(8),
     color: "#15376C",
-    fontSize: 15,
+    fontSize: ms(15),
     fontWeight: "800",
     textAlign: "center",
   },
@@ -1299,30 +1313,30 @@ const styles = StyleSheet.create({
     width: "100%",
     flexDirection: "row",
     justifyContent: "center",
-    gap: 12,
+    gap: s(12),
   },
 
   characterCardsPanel: {
     width: "100%",
-    marginTop: 24,
-    borderRadius: 20,
+    marginTop: s(24),
+    borderRadius: s(20),
     backgroundColor: "rgba(238, 249, 255, 0.72)",
     borderWidth: 1,
     borderColor: "rgba(192, 234, 255, 0.86)",
-    paddingHorizontal: 10,
-    paddingTop: 12,
-    paddingBottom: 12,
+    paddingHorizontal: s(10),
+    paddingTop: s(12),
+    paddingBottom: s(12),
   },
 
   characterCard: {
     position: "relative",
     width: "46%",
-    height: 206,
-    borderRadius: 22,
+    height: s(206),
+    borderRadius: s(22),
     borderWidth: 2,
-    paddingHorizontal: 8,
-    paddingTop: 10,
-    paddingBottom: 10,
+    paddingHorizontal: s(8),
+    paddingTop: s(10),
+    paddingBottom: s(10),
     alignItems: "center",
     justifyContent: "center",
     backgroundColor: "transparent",
@@ -1366,26 +1380,26 @@ const styles = StyleSheet.create({
   },
   characterCardGradient: {
     ...StyleSheet.absoluteFillObject,
-    borderRadius: 19,
+    borderRadius: s(19),
   },
   characterCardIconSlot: {
-    width: 112,
-    height: 112,
+    width: s(112),
+    height: s(112),
     alignItems: "center",
     justifyContent: "center",
     overflow: "visible",
   },
 
   characterCardIcon: {
-    width: 255,
-    height: 255,
+    width: s(255),
+    height: s(255),
     resizeMode: "contain",
   },
 
   characterCardTitle: {
     fontFamily: "Nunito_800ExtraBold",
-    marginTop: 8,
-    fontSize: 25,
+    marginTop: s(8),
+    fontSize: ms(25),
     fontWeight: "900",
     textAlign: "center",
   },
@@ -1404,9 +1418,9 @@ const styles = StyleSheet.create({
 
   characterSelectionReady: {
     fontFamily: "Nunito_800ExtraBold",
-    marginTop: 30,
+    marginTop: s(30),
     color: "#1D4E91",
-    fontSize: 17,
+    fontSize: ms(17),
     fontWeight: "900",
     textAlign: "center",
     letterSpacing: 0.15,
@@ -1416,10 +1430,10 @@ const styles = StyleSheet.create({
   },
 
   characterContinueButton: {
-    marginTop: 13,
-    minWidth: 190,
-    height: 46,
-    borderRadius: 23,
+    marginTop: s(13),
+    minWidth: s(190),
+    height: s(46),
+    borderRadius: s(23),
     alignItems: "center",
     justifyContent: "center",
     shadowColor: "#02649F",
@@ -1433,31 +1447,33 @@ const styles = StyleSheet.create({
   characterContinueGradient: {
     width: "100%",
     height: "100%",
-    borderRadius: 23,
+    borderRadius: s(23),
     borderWidth: 2.5,
     borderColor: "rgba(196, 237, 255, 0.95)",
     position: "relative",
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    paddingHorizontal: 18,
+    paddingHorizontal: s(18),
   },
 
   primaryButtonRightIcon: {
     position: "absolute",
-    right: 18,
+    right: s(18),
   },
 
   characterContinueText: {
     fontFamily: "Nunito_800ExtraBold",
     color: "#FFFFFF",
-    fontSize: 19,
+    fontSize: ms(19),
+    lineHeight: ms(24),
     fontWeight: "900",
     textShadowColor: "rgba(4, 68, 123, 0.45)",
     textShadowOffset: { width: 0, height: 2 },
     textShadowRadius: 2,
     width: "100%",
     textAlign: "center",
+    includeFontPadding: false,
   },
 
   instructionsOverlay: {
@@ -1669,12 +1685,14 @@ const styles = StyleSheet.create({
     fontFamily: "Nunito_800ExtraBold",
     color: "#FFFFFF",
     fontSize: 19,
+    lineHeight: 24,
     fontWeight: "900",
     textShadowColor: "rgba(4, 68, 123, 0.45)",
     textShadowOffset: { width: 0, height: 2 },
     textShadowRadius: 2,
     width: "100%",
     textAlign: "center",
+    includeFontPadding: false,
   },
   /*
   sairButton: {   usado no exit3

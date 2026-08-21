@@ -11,7 +11,6 @@ import {
   Keyboard,
   KeyboardAvoidingView,
   Platform,
-  Dimensions,
   Modal,
 } from "react-native";
 import { FontAwesome, Ionicons } from "@expo/vector-icons";
@@ -24,8 +23,9 @@ import { createUserWithEmailAndPassword, signOut } from "firebase/auth";
 import { RootStackParamList } from "../App";
 import { auth, db } from "../services/firebase";
 import { useThemeMusic } from "../contexts/ThemeMusicContext";
+import { getScreenMetrics } from "../utils/responsive";
 
-const { width, height } = Dimensions.get("window");
+const { width, height } = getScreenMetrics();
 
 // RESPONSIVO
 const FORM_TOP = height * 0.285;
@@ -486,7 +486,14 @@ export default function CadastroScreen({ navigation }: Props) {
                           source={require("../assets/cadastro/botao_entrar_azul.png")}
                           style={styles.buttonImage}
                         />
-                        <Text style={styles.buttonText}>Cadastrar</Text>
+                        <Text
+                          style={styles.buttonText}
+                          numberOfLines={1}
+                          adjustsFontSizeToFit
+                          minimumFontScale={0.82}
+                        >
+                          Cadastrar
+                        </Text>
                       </Pressable>
 
                       <Modal
@@ -547,7 +554,12 @@ export default function CadastroScreen({ navigation }: Props) {
             <Ionicons name="log-in-outline" size={21} color="#FFFFFF" />
           </View>
 
-          <Text style={styles.loginButtonText}>
+          <Text
+            style={styles.loginButtonText}
+            numberOfLines={1}
+            adjustsFontSizeToFit
+            minimumFontScale={0.72}
+          >
             Já tem conta?{" "}
             <Text style={styles.loginButtonHighlight}>Ir para Login</Text>
           </Text>
@@ -682,12 +694,14 @@ const styles = StyleSheet.create({
   buttonText: {
     color: "#FFF",
     fontSize: 26,
+    lineHeight: 31,
     marginLeft: 10,
     marginBottom: 5,
     fontWeight: "bold",
     position: "absolute",
     width: "100%",
     textAlign: "center",
+    includeFontPadding: false,
   },
 
   loginButtonArea: {
@@ -712,9 +726,9 @@ const styles = StyleSheet.create({
   },
 
   loginButtonIcon: {
-    width: 26,
-    height: 26,
-    borderRadius: 16,
+    width: 28,
+    height: 28,
+    borderRadius: 15,
     backgroundColor: "#3498DB",
     alignItems: "center",
     justifyContent: "center",
@@ -722,10 +736,13 @@ const styles = StyleSheet.create({
 
   loginButtonText: {
     flex: 1,
+    minWidth: 0,
     color: "#1B2B44",
     fontSize: 13.5,
+    lineHeight: 17,
     fontWeight: "800",
     textAlign: "center",
+    includeFontPadding: false,
   },
 
   loginButtonHighlight: {

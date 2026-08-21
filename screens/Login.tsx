@@ -11,7 +11,6 @@ import {
   Keyboard,
   KeyboardAvoidingView,
   Platform,
-  Dimensions,
 } from "react-native";
 import { FontAwesome, Ionicons } from "@expo/vector-icons";
 import { Formik } from "formik";
@@ -23,8 +22,9 @@ import { signInWithEmailAndPassword, signOut } from "firebase/auth";
 import { RootStackParamList } from "../App";
 import { auth, db } from "../services/firebase";
 import { useThemeMusic } from "../contexts/ThemeMusicContext";
+import { getScreenMetrics } from "../utils/responsive";
 
-const { width, height } = Dimensions.get("window");
+const { width, height } = getScreenMetrics();
 
 // RESPONSIVO
 const FORM_TOP = height * 0.51;
@@ -202,7 +202,14 @@ export default function LoginScreen({ navigation }: Props) {
                     source={require("../assets/login/botao_entrar_verde.png")}
                     style={styles.buttonImage}
                   />
-                  <Text style={styles.buttonText}>Entrar</Text>
+                  <Text
+                    style={styles.buttonText}
+                    numberOfLines={1}
+                    adjustsFontSizeToFit
+                    minimumFontScale={0.82}
+                  >
+                    Entrar
+                  </Text>
                 </Pressable>
               </>
             )}
@@ -218,7 +225,12 @@ export default function LoginScreen({ navigation }: Props) {
             <FontAwesome name="user-plus" size={18} color="#FFFFFF" />
           </View>
 
-          <Text style={styles.registerButtonText}>
+          <Text
+            style={styles.registerButtonText}
+            numberOfLines={1}
+            adjustsFontSizeToFit
+            minimumFontScale={0.72}
+          >
             Não tem conta?{" "}
             <Text style={styles.registerButtonHighlight}>Cadastre-se</Text>
           </Text>
@@ -242,7 +254,14 @@ export default function LoginScreen({ navigation }: Props) {
             <FontAwesome name="rocket" size={22} color="#2B7DCD" />
           </View>
           <View style={styles.demoButtonTextBox}>
-            <Text style={styles.demoButtonText}>Entrar sem cadastro</Text>
+            <Text
+              style={styles.demoButtonText}
+              numberOfLines={1}
+              adjustsFontSizeToFit
+              minimumFontScale={0.72}
+            >
+              Entrar sem cadastro
+            </Text>
           </View>
         </Pressable>
       </KeyboardAvoidingView>
@@ -354,11 +373,13 @@ const styles = StyleSheet.create({
   buttonText: {
     color: "#FFF",
     fontSize: 26,
+    lineHeight: 31,
     marginLeft: 10,
     fontWeight: "bold",
     position: "absolute",
     width: "100%",
     textAlign: "center",
+    includeFontPadding: false,
   },
 
   registerButtonArea: {
@@ -394,10 +415,13 @@ const styles = StyleSheet.create({
 
   registerButtonText: {
     flex: 1,
+    minWidth: 0,
     color: "#1B2B44",
     fontSize: 13.5,
+    lineHeight: 17,
     fontWeight: "800",
     textAlign: "center",
+    includeFontPadding: false,
   },
 
   registerButtonHighlight: {
@@ -458,6 +482,7 @@ const styles = StyleSheet.create({
 
   demoButtonTextBox: {
     flex: 1,
+    minWidth: 0,
     justifyContent: "center",
   },
 
@@ -466,5 +491,7 @@ const styles = StyleSheet.create({
     fontWeight: "900",
     fontSize: 16,
     lineHeight: 21,
+    textAlign: "center",
+    includeFontPadding: false,
   },
 });

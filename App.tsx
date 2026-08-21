@@ -1,4 +1,5 @@
 import React from "react";
+import { Text, TextInput } from "react-native";
 import { NavigationContainer } from "@react-navigation/native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 
@@ -20,6 +21,20 @@ export type RootStackParamList = {
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
+
+const MAX_FONT_SIZE_MULTIPLIER = 1.12;
+const textDefaults = Text as unknown as { defaultProps?: Text["props"] };
+const textInputDefaults = TextInput as unknown as { defaultProps?: TextInput["props"] };
+
+textDefaults.defaultProps = {
+  ...textDefaults.defaultProps,
+  maxFontSizeMultiplier: MAX_FONT_SIZE_MULTIPLIER,
+};
+
+textInputDefaults.defaultProps = {
+  ...textInputDefaults.defaultProps,
+  maxFontSizeMultiplier: MAX_FONT_SIZE_MULTIPLIER,
+};
 
 export default function App() {
   return (

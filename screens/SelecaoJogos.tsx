@@ -15,9 +15,11 @@ import { FontAwesome } from "@expo/vector-icons";
 import { RootStackParamList } from "../App";
 import { useThemeMusic } from "../contexts/ThemeMusicContext";
 import { getCurrentUserProfile } from "../services/progress";
+import { getScreenMetrics } from "../utils/responsive";
 
 type Props = NativeStackScreenProps<RootStackParamList, "SelecaoJogos">;
 type GreetingGender = "Masculino" | "Feminino" | null;
+const { scale: s, moderateScale: ms } = getScreenMetrics();
 
 export default function SelecaoJogosScreen({ navigation }: Props) {
   const [greeting, setGreeting] = useState("Seja bem-vindo!");
@@ -100,7 +102,12 @@ export default function SelecaoJogosScreen({ navigation }: Props) {
             >
           <FontAwesome name="user" size={24} color="#FFFFFF" />
         </View>
-        <Text style={styles.greetingText} numberOfLines={1}>
+        <Text
+          style={styles.greetingText}
+          numberOfLines={1}
+          adjustsFontSizeToFit
+          minimumFontScale={0.72}
+        >
           {greeting}
         </Text>
           </View>
@@ -188,23 +195,23 @@ const styles = StyleSheet.create({
   },
   musicControlArea: {
     position: "absolute",
-    top: 36,
-    right: 18,
+    top: s(36),
+    right: s(18),
     zIndex: 50,
     alignItems: "flex-end",
   },
   greetingCard: {
     position: "absolute",
-    top: 50,
-    left: 16,
-    width: 200,
-    minHeight: 55,
-    borderRadius: 30,
+    top: s(50),
+    left: s(16),
+    width: s(200),
+    minHeight: s(55),
+    borderRadius: s(30),
     backgroundColor: "rgba(255,255,255,0.94)",
-    paddingHorizontal: 10,
+    paddingHorizontal: s(10),
     flexDirection: "row",
     alignItems: "center",
-    gap: 9,
+    gap: s(9),
     zIndex: 45,
     elevation: 45,
     borderWidth: 1.5,
@@ -214,9 +221,9 @@ const styles = StyleSheet.create({
     shadowRadius: 6,
   },
   greetingIconCircle: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: s(40),
+    height: s(40),
+    borderRadius: s(20),
     backgroundColor: "#2F80ED",
     alignItems: "center",
     justifyContent: "center",
@@ -230,19 +237,22 @@ const styles = StyleSheet.create({
   greetingText: {
     left: 1,
     flex: 1,
+    minWidth: 0,
     color: "#173A6A",
-    fontSize: 17,
+    fontSize: ms(17),
+    lineHeight: ms(22),
     fontWeight: "400",
+    includeFontPadding: false,
   },
   musicButton: {
-    width: 100,
-    height: 100,
+    width: s(100),
+    height: s(100),
     alignItems: "center",
     justifyContent: "center",
   },
   musicButtonImage: {
     position: "absolute",
-    top: 20,
+    top: s(20),
     width: "100%",
     height: "100%",
     resizeMode: "contain",
@@ -252,49 +262,49 @@ const styles = StyleSheet.create({
   },
   logoArea: {
     position: "absolute",
-    top: -150,
-    left: 36,
-    right: 36,
-    height: 805,
+    top: s(-150),
+    left: s(36),
+    right: s(36),
+    height: s(805),
     zIndex: 0,
     elevation: 0,
     alignItems: "center",
   },
   logo: {
-    width: 320,
-    height: 805,
+    width: s(320),
+    height: s(805),
     resizeMode: "contain",
   },
   spacer: {
-    height: 395,
+    height: s(395),
   },
   gamesWrapper: {
     position: "relative",
-    paddingHorizontal: 30,
-    paddingBottom: 76,
-    height: 392,
+    paddingHorizontal: s(30),
+    paddingBottom: s(76),
+    height: s(392),
     zIndex: 10,
     elevation: 10,
   },
   gameCard: {
     position: "absolute",
-    left: 25,
-    right: 25,
-    minHeight: 240,
+    left: s(25),
+    right: s(25),
+    minHeight: s(240),
     zIndex: 11,
     elevation: 11,
   },
   gameCardBackground: {
     flex: 1,
-    paddingLeft: 22,
-    paddingRight: 74,
+    paddingLeft: s(22),
+    paddingRight: s(74),
     justifyContent: "center",
   },
   gameCardJogo1: {
-    top: -15,
+    top: s(-15),
   },
   gameCardJogo2: {
-    top: 120,
+    top: s(120),
   },
   gameCardImage: {
     resizeMode: "stretch",
@@ -303,30 +313,30 @@ const styles = StyleSheet.create({
     maxWidth: "100%",
   },
   gameTitle: {
-    marginLeft: 8,
-    fontSize: 20,
+    marginLeft: s(8),
+    fontSize: ms(20),
     fontWeight: "900",
     color: "#FFFFFF",
   },
   gameSubtitle: {
-    marginLeft: 8,
-    marginTop: 3,
-    fontSize: 18,
+    marginLeft: s(8),
+    marginTop: s(3),
+    fontSize: ms(18),
     fontWeight: "800",
     color: "#FFFFFF",
   },
   playButtonWrapper: {
     position: "absolute",
-    right: -6,
-    top: 6,
-    bottom: 6,
+    right: s(-6),
+    top: s(6),
+    bottom: s(6),
     justifyContent: "center",
     zIndex: 20,
     elevation: 20,
   },
   playButtonImage: {
-    width: 130,
-    height: 160,
+    width: s(130),
+    height: s(160),
     resizeMode: "contain",
   },
 });
