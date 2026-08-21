@@ -24,13 +24,13 @@ import { auth, db } from "../services/firebase";
 import { useThemeMusic } from "../contexts/ThemeMusicContext";
 import { getScreenMetrics } from "../utils/responsive";
 
-const { width, height } = getScreenMetrics();
+const { width, height, scale: s, moderateScale: ms } = getScreenMetrics();
 
 // RESPONSIVO
-const FORM_TOP = height * 0.51;
-const REGISTER_TOP = height * 0.78;
-const REGISTER_WIDTH = width * 0.68;
-const DEMO_TOP = height * 0.87;
+const FORM_TOP = s(435);
+const REGISTER_TOP = s(665);
+const REGISTER_WIDTH = s(267);
+const DEMO_TOP = s(741);
 const PASSWORD_FOCUS_SHIFT = -Math.min(height * 0.18, 145);
 
 type Props = NativeStackScreenProps<RootStackParamList, "Login">;
@@ -130,6 +130,7 @@ export default function LoginScreen({ navigation }: Props) {
           >
             {({ handleChange, handleSubmit, values, errors, touched }) => (
               <>
+                <View style={styles.formStack}>
                 <View
                   style={[
                     styles.inputWrapper,
@@ -211,6 +212,7 @@ export default function LoginScreen({ navigation }: Props) {
                     Entrar
                   </Text>
                 </Pressable>
+                </View>
               </>
             )}
           </Formik>
@@ -295,7 +297,7 @@ const styles = StyleSheet.create({
 
   container: {
     flex: 1,
-    paddingHorizontal: 25,
+    paddingHorizontal: s(25),
   },
 
   formArea: {
@@ -305,14 +307,17 @@ const styles = StyleSheet.create({
     zIndex: 5,
   },
 
+  formStack: {
+    gap: s(12),
+  },
+
   inputWrapper: {
     flexDirection: "row",
     alignItems: "center",
     backgroundColor: "#ffffff",  //#F5F7FA
-    borderRadius: 30,
-    paddingHorizontal: 15,
-    height: 55,
-    marginBottom: 12,
+    borderRadius: s(30),
+    paddingHorizontal: s(15),
+    height: s(55),
     borderWidth: 1,
     borderColor: "#D6EAF8",
     shadowColor: "#000",
@@ -327,9 +332,9 @@ const styles = StyleSheet.create({
   },
 
   iconCircle: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: s(40),
+    height: s(40),
+    borderRadius: s(20),
     backgroundColor: "#3498DB",
     alignItems: "center",
     justifyContent: "center",
@@ -337,14 +342,14 @@ const styles = StyleSheet.create({
 
   input: {
     flex: 1,
-    marginLeft: 10,
-    fontSize: 15,
+    marginLeft: s(10),
+    fontSize: ms(15),
     color: "#333",
   },
 
   eyeButton: {
-    width: 36,
-    height: 36,
+    width: s(36),
+    height: s(36),
     alignItems: "center",
     justifyContent: "center",
     zIndex: 2,
@@ -352,9 +357,9 @@ const styles = StyleSheet.create({
   },
 
   button: {
-    height: 68,
-    marginTop: 4,
-    width: 260,
+    height: s(68),
+    marginTop: s(4),
+    width: s(260),
     alignSelf: "center",
     justifyContent: "center",
     alignItems: "center",
@@ -365,16 +370,16 @@ const styles = StyleSheet.create({
   },
 
   buttonImage: {
-    width: 290,
-    height: 290,
+    width: s(290),
+    height: s(290),
     resizeMode: "contain",
   },
 
   buttonText: {
     color: "#FFF",
-    fontSize: 26,
-    lineHeight: 31,
-    marginLeft: 10,
+    fontSize: ms(26),
+    lineHeight: ms(31),
+    marginLeft: s(10),
     fontWeight: "bold",
     position: "absolute",
     width: "100%",
@@ -385,18 +390,18 @@ const styles = StyleSheet.create({
   registerButtonArea: {
     position: "absolute",
     top: REGISTER_TOP,
-    width: width * 0.65,
-    height: 40,
+    width: s(255),
+    height: s(40),
     alignSelf: "center",
     alignItems: "center",
     justifyContent: "center",
     flexDirection: "row",
-    gap: 10,
+    gap: s(10),
     backgroundColor: "#FFF9E8",
-    borderRadius: 20,
+    borderRadius: s(20),
     borderWidth: 1.3,
     borderColor: "#F5C84B",
-    paddingHorizontal: 14,
+    paddingHorizontal: s(14),
     shadowColor: "#000",
     shadowOpacity: 0.14,
     shadowRadius: 5,
@@ -405,9 +410,9 @@ const styles = StyleSheet.create({
   },
 
   registerButtonIcon: {
-    width: 30,
-    height: 30,
-    borderRadius: 16,
+    width: s(30),
+    height: s(30),
+    borderRadius: s(16),
     backgroundColor: "#3498DB",
     alignItems: "center",
     justifyContent: "center",
@@ -417,8 +422,8 @@ const styles = StyleSheet.create({
     flex: 1,
     minWidth: 0,
     color: "#1B2B44",
-    fontSize: 13.5,
-    lineHeight: 17,
+    fontSize: ms(13.5),
+    lineHeight: ms(17),
     fontWeight: "800",
     textAlign: "center",
     includeFontPadding: false,
@@ -430,9 +435,9 @@ const styles = StyleSheet.create({
 
   separatorArea: {
     position: "absolute",
-    top: DEMO_TOP - 36,
+    top: DEMO_TOP - s(36),
     width: REGISTER_WIDTH * 0.78,
-    height: 32,
+    height: s(32),
     alignSelf: "center",
     flexDirection: "row",
     alignItems: "center",
@@ -446,27 +451,27 @@ const styles = StyleSheet.create({
   },
 
   separatorText: {
-    marginHorizontal: 12,
+    marginHorizontal: s(12),
     color: "#95A5A6",
     fontWeight: "bold",
-    fontSize: 16,
+    fontSize: ms(16),
   },
 
   demoButton: {
     position: "absolute",
-    top: DEMO_TOP + 2,
-    width: width * 0.60,
-    height: 48,
+    top: DEMO_TOP + s(2),
+    width: s(236),
+    height: s(48),
     alignSelf: "center",
     alignItems: "center",
     justifyContent: "center",
     flexDirection: "row",
-    gap: 10,
+    gap: s(10),
     backgroundColor: "#FFFFFF",
-    borderRadius: 24,
+    borderRadius: s(24),
     borderWidth: 1.6,
     borderColor: "#2B79BE",
-    paddingHorizontal: 14,
+    paddingHorizontal: s(14),
     shadowColor: "#000",
     shadowOpacity: 0.14,
     shadowRadius: 7,
@@ -474,8 +479,8 @@ const styles = StyleSheet.create({
   },
 
   demoButtonIconSlot: {
-    width: 30,
-    height: 30,
+    width: s(30),
+    height: s(30),
     alignItems: "center",
     justifyContent: "center",
   },
@@ -489,8 +494,8 @@ const styles = StyleSheet.create({
   demoButtonText: {
     color: "#194B90",
     fontWeight: "900",
-    fontSize: 16,
-    lineHeight: 21,
+    fontSize: ms(16),
+    lineHeight: ms(21),
     textAlign: "center",
     includeFontPadding: false,
   },
