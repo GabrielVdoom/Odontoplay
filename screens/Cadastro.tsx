@@ -25,10 +25,10 @@ import { auth, db } from "../services/firebase";
 import { useThemeMusic } from "../contexts/ThemeMusicContext";
 import { getScreenMetrics } from "../utils/responsive";
 
-const { width, height } = getScreenMetrics();
+const { width, height, scale: s, moderateScale: ms } = getScreenMetrics();
 
 // RESPONSIVO
-const FORM_TOP = height * 0.285;
+const FORM_TOP = s(243);
 const LOGIN_BOTTOM = height * 0.16;
 const LOGIN_WIDTH = width * 0.6;
 const LOGIN_HEIGHT = 36;
@@ -234,6 +234,7 @@ export default function CadastroScreen({ navigation }: Props) {
 
                   return (
                     <>
+                      <View style={styles.formStack}>
                       <View
                         style={[
                           styles.inputWrapper,
@@ -327,7 +328,7 @@ export default function CadastroScreen({ navigation }: Props) {
                                   : values.genero
                                   ? "#333"
                                   : "#999",
-                              fontSize: 15,
+                              fontSize: ms(15),
                             }}
                           >
                             {touched.genero && errors.genero
@@ -495,6 +496,7 @@ export default function CadastroScreen({ navigation }: Props) {
                           Cadastrar
                         </Text>
                       </Pressable>
+                      </View>
 
                       <Modal
                         transparent
@@ -596,7 +598,7 @@ const styles = StyleSheet.create({
 
   container: {
     flex: 1,
-    paddingHorizontal: 48,
+    paddingHorizontal: s(48),
   },
 
   formArea: {
@@ -604,15 +606,18 @@ const styles = StyleSheet.create({
     marginTop: FORM_TOP,
   },
 
+  formStack: {
+    gap: s(8),
+  },
+
   inputWrapper: {
-    left: 1,
+    left: s(1),
     flexDirection: "row",
     alignItems: "center",
     backgroundColor: "#ffffff",
-    borderRadius: 30,
-    paddingHorizontal: 15,
-    height: 55, //estava em 45 antes da mudança do formulário
-    marginBottom: 8,
+    borderRadius: s(30),
+    paddingHorizontal: s(15),
+    height: s(55), //estava em 45 antes da mudança do formulário
     borderWidth: 1,
     borderColor: "#D6EAF8",
     shadowColor: "#000",
@@ -627,9 +632,9 @@ const styles = StyleSheet.create({
   },
 
   iconCircle: {
-    width: 35,
-    height: 35,
-    borderRadius: 20,
+    width: s(35),
+    height: s(35),
+    borderRadius: s(20),
     backgroundColor: "#3498DB",
     alignItems: "center",
     justifyContent: "center",
@@ -641,15 +646,15 @@ const styles = StyleSheet.create({
 
   input: {
     flex: 1,
-    marginLeft: 10,
-    fontSize: 15,
+    marginLeft: s(10),
+    fontSize: ms(15),
     color: "#333",
   },
 
   inputFieldArea: {
     flex: 1,
     justifyContent: "center",
-    marginLeft: 10,
+    marginLeft: s(10),
     height: "100%",
   },
 
@@ -661,8 +666,8 @@ const styles = StyleSheet.create({
   },
 
   eyeButton: {
-    width: 35,
-    height: 35,
+    width: s(35),
+    height: s(35),
     alignItems: "center",
     justifyContent: "center",
     zIndex: 2,
@@ -670,9 +675,9 @@ const styles = StyleSheet.create({
   },
 
   button: {
-    height: 68,
-    marginTop: 5,
-    width: 260,
+    height: s(68),
+    marginTop: s(5),
+    width: s(260),
     alignSelf: "center",
     justifyContent: "center",
     alignItems: "center",
@@ -686,17 +691,17 @@ const styles = StyleSheet.create({
   },
 
   buttonImage: {
-    width: 270,
-    height: 270,
+    width: s(270),
+    height: s(270),
     resizeMode: "contain",
   },
 
   buttonText: {
     color: "#FFF",
-    fontSize: 26,
-    lineHeight: 31,
-    marginLeft: 10,
-    marginBottom: 5,
+    fontSize: ms(26),
+    lineHeight: ms(31),
+    marginLeft: s(10),
+    marginBottom: s(5),
     fontWeight: "bold",
     position: "absolute",
     width: "100%",
