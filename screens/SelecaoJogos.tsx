@@ -4,17 +4,20 @@ import {
   Image,
   ImageBackground,
   ImageSourcePropType,
+  Platform,
   Pressable,
-  SafeAreaView,
   StyleSheet,
   Text,
   View,
 } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { NativeStackScreenProps } from "@react-navigation/native-stack";
-import { FontAwesome } from "@expo/vector-icons";
+import { signOut } from "firebase/auth";
+import { FontAwesome, Ionicons } from "@expo/vector-icons";
 import { RootStackParamList } from "../App";
 import { useThemeMusic } from "../contexts/ThemeMusicContext";
 import { getCurrentUserProfile } from "../services/progress";
+import { auth } from "../services/firebase";
 import { getScreenMetrics } from "../utils/responsive";
 
 type Props = NativeStackScreenProps<RootStackParamList, "SelecaoJogos">;
@@ -65,14 +68,28 @@ export default function SelecaoJogosScreen({ navigation }: Props) {
     Alert.alert(title, "Esse jogo sera conectado na proxima etapa do Odontoplay.");
   };
 
+  const handleBackToLogin = async () => {
+    await signOut(auth).catch(() => null);
+    navigation.replace("Login");
+  };
+
   return (
     <ImageBackground
       source={require("../assets/selecao-jogos/background_selecao9.png")}
       style={styles.background}
       imageStyle={styles.backgroundImage}
     >
-      <SafeAreaView style={styles.safeArea}>
+      {/* Preserve the existing Android spacing; the legacy view only applied insets on iOS. */}
+      <SafeAreaView style={styles.safeArea} edges={Platform.OS === "ios" ? undefined : []}>
         <View style={styles.content}>
+          <Pressable
+            style={styles.backIconButton}
+            hitSlop={0}
+            onPress={handleBackToLogin}
+          >
+            <Ionicons name="chevron-back" size={30} color="#FFFFFF" />
+          </Pressable>
+
           <View style={styles.musicControlArea}>
             <Pressable style={styles.musicButton} onPress={toggleMusic}>
               <Image
@@ -193,17 +210,36 @@ const styles = StyleSheet.create({
   content: {
     flex: 1,
   },
+  backIconButton: {
+    position: "absolute",
+    top: s(56),
+    left: s(18),
+    width: s(42),
+    height: s(42),
+    borderRadius: s(21),
+    backgroundColor: "rgba(5, 47, 121, 0.52)",
+    borderWidth: 1,
+    borderColor: "rgba(205, 237, 255, 0.5)",
+    alignItems: "center",
+    justifyContent: "center",
+    zIndex: 120,
+    elevation: 120,
+    shadowColor: "#03194C",
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.22,
+    shadowRadius: 5,
+  },
   musicControlArea: {
     position: "absolute",
     top: s(36),
-    right: s(18),
+    right: s(10),
     zIndex: 50,
     alignItems: "flex-end",
   },
   greetingCard: {
     position: "absolute",
     top: s(50),
-    left: s(16),
+    left: s(68),
     width: s(200),
     minHeight: s(55),
     borderRadius: s(30),

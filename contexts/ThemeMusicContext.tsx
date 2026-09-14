@@ -7,7 +7,7 @@ import React, {
   useRef,
   useState,
 } from "react";
-import { Audio } from "expo-av";
+import { AudioPlayer, createAudioPlayer, setAudioModeAsync } from "expo-audio";
 
 type ThemeMusicContextValue = {
   isPlaying: boolean;
@@ -22,7 +22,7 @@ export const THEME_MUSIC_VOLUME = 0.20;
 export const THEME_MUSIC_DUCKED_VOLUME = 0.05;
 
 export function ThemeMusicProvider({ children }: { children: ReactNode }) {
-  const soundRef = useRef<Audio.Sound | null>(null);
+  const soundRef = useRef<AudioPlayer | null>(null);
   const volumeRef = useRef(THEME_MUSIC_VOLUME);
   const [isPlaying, setIsPlaying] = useState(false);
 
@@ -31,14 +31,9 @@ export function ThemeMusicProvider({ children }: { children: ReactNode }) {
       return soundRef.current;
     }
 
-    const { sound } = await Audio.Sound.createAsync(
-      require("../assets/audio/Odontoplay.mp3"),
-      {
-        isLooping: true,
-        shouldPlay: false,
-        volume: volumeRef.current,
-      }
-    );
+    const sound = createAudioPlayer(require("../assets/audio/Odontoplay.mp3"));
+    sound.loop = true;
+    sound.volume = volumeRef.current;
 
     soundRef.current = sound;
     return sound;
@@ -46,10 +41,9 @@ export function ThemeMusicProvider({ children }: { children: ReactNode }) {
 
   const startMusic = useCallback(async () => {
     const sound = await loadMusic();
-    const status = await sound.getStatusAsync();
 
-    if (status.isLoaded && !status.isPlaying) {
-      await sound.playAsync();
+    if (!sound.playing) {
+      sound.play();
       setIsPlaying(true);
     }
   }, [loadMusic]);
@@ -62,10 +56,8 @@ export function ThemeMusicProvider({ children }: { children: ReactNode }) {
       return;
     }
 
-    const status = await sound.getStatusAsync();
-
-    if (status.isLoaded && status.isPlaying) {
-      await sound.pauseAsync();
+    if (sound.playing) {
+      sound.pause();
     }
 
     setIsPlaying(false);
@@ -81,40 +73,31 @@ export function ThemeMusicProvider({ children }: { children: ReactNode }) {
       return;
     }
 
-    const status = await sound.getStatusAsync();
-
-    if (status.isLoaded) {
-      await sound.setVolumeAsync(nextVolume);
-    }
+    sound.volume = nextVolume;
   }, []);
 
   const toggleMusic = useCallback(async () => {
     const sound = await loadMusic();
-    const status = await sound.getStatusAsync();
 
-    if (!status.isLoaded) {
-      return;
-    }
-
-    if (status.isPlaying) {
-      await sound.pauseAsync();
+    if (sound.playing) {
+      sound.pause();
       setIsPlaying(false);
       return;
     }
 
-    await sound.playAsync();
+    sound.play();
     setIsPlaying(true);
   }, [loadMusic]);
 
   useEffect(() => {
-    Audio.setAudioModeAsync({
-      playsInSilentModeIOS: true,
-      staysActiveInBackground: false,
-      shouldDuckAndroid: true,
-    });
+    void setAudioModeAsync({
+      playsInSilentMode: true,
+      shouldPlayInBackground: false,
+      interruptionMode: "duckOthers",
+    }).catch((error) => console.warn("Audio configuration failed", error));
 
     return () => {
-      soundRef.current?.unloadAsync();
+      soundRef.current?.remove();
       soundRef.current = null;
     };
   }, []);

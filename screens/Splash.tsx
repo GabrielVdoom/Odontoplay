@@ -2,10 +2,10 @@ import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   ImageBackground,
   Platform,
-  SafeAreaView,
   StatusBar,
   StyleSheet,
 } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { onAuthStateChanged } from "firebase/auth";
 import { NativeStackScreenProps } from "@react-navigation/native-stack";
 import LottieView from "lottie-react-native";
@@ -93,7 +93,7 @@ export default function Splash({ navigation }: Props) {
   }
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={styles.container} edges={Platform.OS === "ios" ? undefined : []}>
       <StatusBar backgroundColor="#FFFFFF" barStyle="dark-content" />
       <LottieView
         ref={animationRef}

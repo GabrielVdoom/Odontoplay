@@ -1237,7 +1237,7 @@ const styles = StyleSheet.create({
   },
 
   characterSelectionOverlay: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     zIndex: 30,
     backgroundColor: "rgba(17, 74, 121, 0.28)",
     alignItems: "center",
@@ -1379,7 +1379,7 @@ const styles = StyleSheet.create({
     transform: [{ scale: 1.01 }],
   },
   characterCardGradient: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     borderRadius: s(19),
   },
   characterCardIconSlot: {
@@ -1477,7 +1477,7 @@ const styles = StyleSheet.create({
   },
 
   instructionsOverlay: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     zIndex: 50,
     backgroundColor: "rgba(17, 74, 121, 0.28)",
     alignItems: "center",

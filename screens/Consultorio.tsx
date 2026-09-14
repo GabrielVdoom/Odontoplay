@@ -8,13 +8,18 @@ import {
   Platform,
   Pressable,
   StyleSheet,
+  StyleProp,
+  TextStyle,
   Text,
   View,
+  useWindowDimensions,
 } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { useFocusEffect } from "@react-navigation/native";
 import { Ionicons } from "@expo/vector-icons";
-import { Audio } from "expo-av";
+import { AudioPlayer, createAudioPlayer } from "expo-audio";
+import { disposeAudioPlayer } from "../utils/audio";
 import { LinearGradient } from "expo-linear-gradient";
 import { RootStackParamList } from "../App";
 import {
@@ -201,10 +206,10 @@ export default function ConsultorioScreen({ navigation }: Props) {
   const initialDentistProgress = useRef(new Animated.Value(0)).current;
   const selectedInstrumentProgress = useRef(new Animated.Value(0)).current;
   const lessonCardScale = useRef(new Animated.Value(0.94)).current;
-  const introAudioRef = useRef<Audio.Sound | null>(null);
+  const introAudioRef = useRef<AudioPlayer | null>(null);
   const introAudioDelayRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const practiceAudioRef = useRef<Audio.Sound | null>(null);
-  const completionAudioRef = useRef<Audio.Sound | null>(null);
+  const practiceAudioRef = useRef<AudioPlayer | null>(null);
+  const completionAudioRef = useRef<AudioPlayer | null>(null);
 
   useEffect(() => {
     void preloadConsultorioImages().catch(() => undefined);
@@ -217,11 +222,11 @@ export default function ConsultorioScreen({ navigation }: Props) {
         introAudioDelayRef.current = null;
       }
 
-      introAudioRef.current?.unloadAsync();
+      disposeAudioPlayer(introAudioRef.current);
       introAudioRef.current = null;
-      practiceAudioRef.current?.unloadAsync();
+      disposeAudioPlayer(practiceAudioRef.current);
       practiceAudioRef.current = null;
-      completionAudioRef.current?.unloadAsync();
+      disposeAudioPlayer(completionAudioRef.current);
       completionAudioRef.current = null;
       void setMusicVolume(THEME_MUSIC_VOLUME);
     };
@@ -331,48 +336,46 @@ export default function ConsultorioScreen({ navigation }: Props) {
 
   useEffect(() => {
     if (lessonStage !== "practice") {
-      practiceAudioRef.current?.unloadAsync();
+      disposeAudioPlayer(practiceAudioRef.current);
       practiceAudioRef.current = null;
       return;
     }
 
     const audioSource = instrumentPracticeAudio[lessonInstrumentIndex] ?? instrumentPracticeAudio[0];
     let isActive = true;
-    let currentSound: Audio.Sound | null = null;
+    let currentSound: AudioPlayer | null = null;
     let audioDelay: ReturnType<typeof setTimeout> | null = null;
 
     const playPracticeAudio = async () => {
       try {
         if (practiceAudioRef.current) {
-          await practiceAudioRef.current.unloadAsync();
+          disposeAudioPlayer(practiceAudioRef.current);
           practiceAudioRef.current = null;
         }
 
         await setMusicVolume(THEME_MUSIC_DUCKED_VOLUME);
 
-        const { sound } = await Audio.Sound.createAsync(audioSource, {
-          shouldPlay: true,
-          volume: 1,
-        });
+        const sound = createAudioPlayer(audioSource);
 
         if (!isActive) {
-          await sound.unloadAsync();
+          disposeAudioPlayer(sound);
           return;
         }
 
         currentSound = sound;
         practiceAudioRef.current = sound;
 
-        sound.setOnPlaybackStatusUpdate((status) => {
+        sound.addListener("playbackStatusUpdate", (status) => {
           if (status.isLoaded && status.didJustFinish) {
             void setMusicVolume(THEME_MUSIC_VOLUME);
-            void sound.unloadAsync();
+            disposeAudioPlayer(sound);
 
             if (practiceAudioRef.current === sound) {
               practiceAudioRef.current = null;
             }
           }
         });
+        sound.play();
       } catch {
         if (isActive) {
           void setMusicVolume(THEME_MUSIC_VOLUME);
@@ -393,7 +396,7 @@ export default function ConsultorioScreen({ navigation }: Props) {
       }
 
       if (currentSound) {
-        void currentSound.unloadAsync();
+        disposeAudioPlayer(currentSound);
       }
 
       if (practiceAudioRef.current === currentSound) {
@@ -406,46 +409,44 @@ export default function ConsultorioScreen({ navigation }: Props) {
 
   useEffect(() => {
     if (!showCompletion) {
-      completionAudioRef.current?.unloadAsync();
+      disposeAudioPlayer(completionAudioRef.current);
       completionAudioRef.current = null;
       return;
     }
 
     let isActive = true;
-    let currentSound: Audio.Sound | null = null;
+    let currentSound: AudioPlayer | null = null;
 
     const playCompletionAudio = async () => {
       try {
         if (completionAudioRef.current) {
-          await completionAudioRef.current.unloadAsync();
+          disposeAudioPlayer(completionAudioRef.current);
           completionAudioRef.current = null;
         }
 
         await setMusicVolume(THEME_MUSIC_DUCKED_VOLUME);
 
-        const { sound } = await Audio.Sound.createAsync(completionAudio, {
-          shouldPlay: true,
-          volume: 1,
-        });
+        const sound = createAudioPlayer(completionAudio);
 
         if (!isActive) {
-          await sound.unloadAsync();
+          disposeAudioPlayer(sound);
           return;
         }
 
         currentSound = sound;
         completionAudioRef.current = sound;
 
-        sound.setOnPlaybackStatusUpdate((status) => {
+        sound.addListener("playbackStatusUpdate", (status) => {
           if (status.isLoaded && status.didJustFinish) {
             void setMusicVolume(THEME_MUSIC_VOLUME);
-            void sound.unloadAsync();
+            disposeAudioPlayer(sound);
 
             if (completionAudioRef.current === sound) {
               completionAudioRef.current = null;
             }
           }
         });
+        sound.play();
       } catch {
         if (isActive) {
           void setMusicVolume(THEME_MUSIC_VOLUME);
@@ -460,7 +461,7 @@ export default function ConsultorioScreen({ navigation }: Props) {
       isActive = false;
 
       if (currentSound) {
-        void currentSound.unloadAsync();
+        disposeAudioPlayer(currentSound);
       }
 
       if (completionAudioRef.current === currentSound) {
@@ -505,16 +506,6 @@ export default function ConsultorioScreen({ navigation }: Props) {
     outputRange: [36, 0],
   });
 
-  const initialDentistTranslateX = initialDentistProgress.interpolate({
-    inputRange: [0, 1],
-    outputRange: [70, 0],
-  });
-
-  const initialDentistTranslateY = initialDentistProgress.interpolate({
-    inputRange: [0, 1],
-    outputRange: [18, 0],
-  });
-
   const selectedOrigin = animatedInstrumentId
     ? instrumentOriginPositions[animatedInstrumentId]
     : null;
@@ -554,8 +545,6 @@ export default function ConsultorioScreen({ navigation }: Props) {
 
   const childName = selectedCharacter === "menina" ? "Laura" : "Lucas";
   const isGirlCharacter = selectedCharacter === "menina";
-  const greetingLead = selectedCharacter === "menina" ? "Essa é a" : "Este é o";
-  const greetingText = `${greetingLead} ${childName}!`;
   const currentPracticeImages = isGirlCharacter ? girlPracticeImages : practiceImages;
   const girlPink = "#EC6A9F";
   const boyBlue = "#243B8F";
@@ -617,24 +606,18 @@ export default function ConsultorioScreen({ navigation }: Props) {
   const playCharacterIntroAudio = async () => {
     try {
       if (introAudioRef.current) {
-        await introAudioRef.current.unloadAsync();
+        disposeAudioPlayer(introAudioRef.current);
         introAudioRef.current = null;
       }
 
       await setMusicVolume(THEME_MUSIC_DUCKED_VOLUME);
 
-      const { sound } = await Audio.Sound.createAsync(
-        characterIntroAudio[selectedCharacter],
-        {
-          shouldPlay: true,
-          volume: 1,
-        }
-      );
+      const sound = createAudioPlayer(characterIntroAudio[selectedCharacter]);
 
-      sound.setOnPlaybackStatusUpdate((status) => {
+      sound.addListener("playbackStatusUpdate", (status) => {
         if (status.isLoaded && status.didJustFinish) {
           void setMusicVolume(THEME_MUSIC_VOLUME);
-          void sound.unloadAsync();
+          disposeAudioPlayer(sound);
 
           if (introAudioRef.current === sound) {
             introAudioRef.current = null;
@@ -643,6 +626,7 @@ export default function ConsultorioScreen({ navigation }: Props) {
       });
 
       introAudioRef.current = sound;
+      sound.play();
     } catch {
       void setMusicVolume(THEME_MUSIC_VOLUME);
       introAudioRef.current = null;
@@ -656,7 +640,7 @@ export default function ConsultorioScreen({ navigation }: Props) {
     }
 
     if (introAudioRef.current) {
-      await introAudioRef.current.unloadAsync();
+      disposeAudioPlayer(introAudioRef.current);
       introAudioRef.current = null;
     }
 
@@ -1047,127 +1031,11 @@ export default function ConsultorioScreen({ navigation }: Props) {
       ) : null}
 
       {showInstructions ? (
-        <View style={styles.instructionsLayer}>
-          <View style={styles.instructionsOverlay}>
-            <Animated.Image
-              source={require("../assets/jogo1/dentista-1.png")}
-              style={[
-                styles.dentistaInicial,
-                isGirlCharacter && styles.dentistaInicialGirl,
-                {
-                  opacity: initialDentistProgress,
-                  transform: [
-                    { translateX: initialDentistTranslateX },
-                    { translateY: initialDentistTranslateY },
-                  ],
-                },
-              ]}
-            />
-
-            <View style={styles.instructionsVisitImageFrame}>
-              <Image
-                source={require("../assets/jogo1/titulo3.png")}
-                style={styles.instructionsVisitImage}
-              />
-            </View>
-
-            <View
-              style={[
-                styles.instructionsBoxFrame,
-                isGirlCharacter && styles.instructionsBoxFrameGirl,
-              ]}
-            >
-              <LinearGradient
-                colors={["rgba(16, 94, 199, 0.99)", "rgba(5, 62, 153, 0.98)", "rgba(2, 42, 116, 0.99)"]}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 1 }}
-                style={styles.instructionsBox}
-              >
-              <View style={styles.instructionsHero}>
-                <Text style={styles.instructionsCardSparkle}>{"\u2726"}</Text>
-                <View style={styles.instructionsGreetingLogo}>
-                  <Text style={[styles.instructionsGreetingLayer, styles.instructionsGreetingStroke]}>
-                    {greetingText}
-                  </Text>
-                  <Text style={[styles.instructionsGreetingLayer, styles.instructionsGreetingDepth]}>
-                    {greetingText}
-                  </Text>
-                  <Text style={styles.instructionsGreeting}>
-                    {greetingLead}{" "}
-                    <Text
-                      style={[
-                        styles.instructionsName,
-                        isGirlCharacter && styles.instructionsNameGirl,
-                      ]}
-                    >
-                      {childName}!
-                    </Text>
-                  </Text>
-                </View>
-                <Text style={styles.instructionsCardSparkle}>{"\u2726"}</Text>
-              </View>
-              <Text style={styles.instructionsText}>
-                Hoje é a primeira consulta {selectedCharacter === "menina" ? "dela" : "dele"}.{"\n"}
-                {selectedCharacter === "menina" ? "Ela está" : "Ele está"} um
-                pouquinho {selectedCharacter === "menina" ? "nervosa" : "nervoso"}.
-              </Text>
-              <LinearGradient
-                colors={["rgba(95, 174, 245, 0.20)", "rgba(255, 255, 255, 0.06)"]}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 1 }}
-                style={styles.instructionsInvite}
-              >
-                <View style={styles.instructionsInviteIcon}>
-                  <Ionicons name="search-outline" size={24} color="#C9EBFF" />
-                </View>
-                <View style={styles.instructionsInviteCopy}>
-                  <Text style={styles.instructionsPromptLine}>
-                    Vamos ajudar {selectedCharacter === "menina" ? "a" : "o"}{" "}
-                    <Text
-                      style={[
-                        styles.instructionsPromptName,
-                        isGirlCharacter && styles.instructionsPromptNameGirl,
-                      ]}
-                    >
-                      {childName}
-                    </Text>
-                    {" a conhecer"}
-                  </Text>
-                  <Text style={styles.instructionsPromptLine}>
-                    {"os instrumentos do consult\u00f3rio?"}
-                  </Text>
-                </View>
-              </LinearGradient>
-              <Pressable
-                style={styles.instructionsButton}
-                onPress={startGameplay}
-              >
-                <LinearGradient
-                  colors={["#A8F45F", "#53CC20", "#27A814"]}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 0, y: 1 }}
-                  style={styles.instructionsButtonGradient}
-                >
-                  <Text
-                    style={styles.instructionsButtonText}
-                    numberOfLines={1}
-                    adjustsFontSizeToFit
-                    minimumFontScale={0.8}
-                  >
-                    Começar
-                  </Text>
-                  <Ionicons
-                    name="chevron-forward"
-                    size={28}
-                    color="#FFFFFF"
-                    style={styles.instructionsButtonIcon}
-                  />
-                </LinearGradient>
-              </Pressable>
-              </LinearGradient>
-            </View>
-          </View>
-        </View>
+        <ConsultorioIntro
+          selectedCharacter={selectedCharacter}
+          initialDentistProgress={initialDentistProgress}
+          startGameplay={startGameplay}
+        />
       ) : null}
 
       {showCharacterSelection ? (
@@ -1590,6 +1458,213 @@ function CompletionScreen({
   );
 }
 
+
+// Measure an unconstrained copy so fitting uses the device's real font metrics.
+// React Native Web does not implement adjustsFontSizeToFit; this also keeps previews faithful.
+function IntroFittedText({ children, style, numberOfLines = 1 }: { children: React.ReactNode; style: StyleProp<TextStyle>; numberOfLines?: number }) {
+  const flatStyle = StyleSheet.flatten(style);
+  const [availableWidth, setAvailableWidth] = useState(0);
+  const [textWidth, setTextWidth] = useState(0);
+  const fit = availableWidth && textWidth ? Math.min(1, availableWidth / (textWidth + 1)) : 1;
+  return (
+    <View style={{ width: flatStyle.width || "100%", position: flatStyle.position, left: flatStyle.left, right: flatStyle.right, minWidth: 0 }}
+      onLayout={({ nativeEvent: { layout } }) => setAvailableWidth(layout.width)}>
+      <View pointerEvents="none" accessible={false} importantForAccessibility="no-hide-descendants"
+        aria-hidden style={{ position: "absolute", width: 10000, opacity: 0, alignItems: "flex-start" }}>
+        <Text numberOfLines={numberOfLines} maxFontSizeMultiplier={1.12}
+          style={[flatStyle, { position: "relative", width: "auto", alignSelf: "flex-start", left: undefined, right: undefined }]}
+          onLayout={({ nativeEvent: { layout } }) => setTextWidth(layout.width)}>{children}</Text>
+      </View>
+      <Text numberOfLines={numberOfLines} maxFontSizeMultiplier={1.12}
+        style={[flatStyle, { position: "relative", left: undefined, right: undefined, fontSize: (flatStyle.fontSize || 14) * fit }]}>{children}</Text>
+    </View>
+  );
+}
+
+// Measure the safe content area, not the physical screen (which includes system bars).
+function ConsultorioIntro({ selectedCharacter, initialDentistProgress, startGameplay }: {
+  selectedCharacter: ConsultorioCharacter;
+  initialDentistProgress: Animated.Value;
+  startGameplay: () => void;
+}) {
+  const window = useWindowDimensions();
+  const [area, setArea] = useState({ width: window.width, height: window.height });
+  const [cardHeight, setCardHeight] = useState(0);
+  const isGirlCharacter = selectedCharacter === "menina";
+  const childName = isGirlCharacter ? "Laura" : "Lucas";
+  const greetingLead = isGirlCharacter ? "Essa é a" : "Este é o";
+  const greetingText = `${greetingLead} ${childName}!`;
+  const introStyles = getIntroStyles(area.width, area.height, cardHeight);
+  const initialDentistTranslateX = initialDentistProgress.interpolate({
+    inputRange: [0, 1],
+    outputRange: [70, 0],
+  });
+
+  const initialDentistTranslateY = initialDentistProgress.interpolate({
+    inputRange: [0, 1],
+    outputRange: [18, 0],
+  });
+
+  return (
+        <SafeAreaView style={styles.instructionsLayer} edges={["bottom", "left", "right"]}>
+          <View style={introStyles.instructionsOverlay} onLayout={({ nativeEvent: { layout } }) => setArea({ width: layout.width, height: layout.height })}>
+            <Animated.Image
+              testID="intro-dentist"
+              source={require("../assets/jogo1/dentista-1.png")}
+              style={[
+                introStyles.dentistaInicial,
+                {
+                  opacity: initialDentistProgress,
+                  transform: [
+                    { translateX: initialDentistTranslateX },
+                    { translateY: initialDentistTranslateY },
+                  ],
+                },
+              ]}
+            />
+
+            <View testID="intro-title" style={introStyles.instructionsVisitImageFrame}>
+              <Image
+                source={require("../assets/jogo1/titulo3.png")}
+                style={styles.instructionsVisitImage}
+              />
+            </View>
+
+            <View
+              testID="intro-card"
+              onLayout={({ nativeEvent: { layout } }) => setCardHeight(layout.height)}
+              style={[
+                introStyles.instructionsBoxFrame,
+                isGirlCharacter && styles.instructionsBoxFrameGirl,
+              ]}
+            >
+              <LinearGradient
+                colors={["rgba(16, 94, 199, 0.99)", "rgba(5, 62, 153, 0.98)", "rgba(2, 42, 116, 0.99)"]}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={introStyles.instructionsBox}
+              >
+              <View style={introStyles.instructionsHero}>
+                <Text style={styles.instructionsCardSparkle}>{"\u2726"}</Text>
+                <View style={introStyles.instructionsGreetingLogo}>
+                  <IntroFittedText style={[introStyles.instructionsGreetingLayer, styles.instructionsGreetingStroke]}>
+                    {greetingText}
+                  </IntroFittedText>
+                  <IntroFittedText style={[introStyles.instructionsGreetingLayer, styles.instructionsGreetingDepth]}>
+                    {greetingText}
+                  </IntroFittedText>
+                  <IntroFittedText style={introStyles.instructionsGreeting}>
+                    {greetingLead}{" "}
+                    <Text
+                      style={[
+                        styles.instructionsName,
+                        isGirlCharacter && styles.instructionsNameGirl,
+                      ]}
+                    >
+                      {childName}!
+                    </Text>
+                  </IntroFittedText>
+                </View>
+                <Text style={styles.instructionsCardSparkle}>{"\u2726"}</Text>
+              </View>
+              <IntroFittedText style={introStyles.instructionsText} numberOfLines={2}>
+                Hoje é a primeira consulta {selectedCharacter === "menina" ? "dela" : "dele"}.{"\n"}
+                {selectedCharacter === "menina" ? "Ela está" : "Ele está"} um
+                pouquinho {selectedCharacter === "menina" ? "nervosa" : "nervoso"}.
+              </IntroFittedText>
+              <LinearGradient
+                colors={["rgba(95, 174, 245, 0.20)", "rgba(255, 255, 255, 0.06)"]}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={introStyles.instructionsInvite}
+              >
+                <View style={introStyles.instructionsInviteIcon}>
+                  <Ionicons name="search-outline" size={24} color="#C9EBFF" />
+                </View>
+                <View style={styles.instructionsInviteCopy}>
+                  <IntroFittedText style={introStyles.instructionsPromptLine} numberOfLines={2}>
+                    Vamos ajudar {selectedCharacter === "menina" ? "a" : "o"}{" "}
+                    <Text
+                      style={[
+                        styles.instructionsPromptName,
+                        isGirlCharacter && styles.instructionsPromptNameGirl,
+                      ]}
+                    >
+                      {childName}
+                    </Text>
+                    {" a conhecer\nos instrumentos do consultório?"}
+                  </IntroFittedText>
+                </View>
+              </LinearGradient>
+              <Pressable
+                style={introStyles.instructionsButton}
+                onPress={startGameplay}
+              >
+                <LinearGradient
+                  colors={["#A8F45F", "#53CC20", "#27A814"]}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 0, y: 1 }}
+                  style={introStyles.instructionsButtonGradient}
+                >
+                  <Text
+                    style={introStyles.instructionsButtonText}
+                    numberOfLines={1}
+                    adjustsFontSizeToFit
+                    minimumFontScale={0.8}
+                    maxFontSizeMultiplier={1.12}
+                  >
+                    Começar
+                  </Text>
+                  <Ionicons
+                    name="chevron-forward"
+                    size={28}
+                    color="#FFFFFF"
+                    style={introStyles.instructionsButtonIcon}
+                  />
+                </LinearGradient>
+              </Pressable>
+              </LinearGradient>
+            </View>
+          </View>
+        </SafeAreaView>
+  );
+}
+
+function getIntroStyles(width: number, height: number, measuredCardHeight: number) {
+  const cardWidth = Math.min(width * 0.84, 430);
+  const unit = cardWidth / (393 * 0.84);
+  // Tighten vertical gaps on shorter viewports; text and controls retain their own sizes.
+  const spacing = Math.min(1, Math.max(0.65, height / (760 * unit)));
+  const cardHeight = measuredCardHeight || 286 * unit;
+  const cardTop = height - cardHeight;
+  const titleHeight = Math.min(242 * unit, height * 0.31);
+  const titleTop = Math.min(30 * unit, height * 0.035);
+  const dentistOverlap = 142 * unit;
+  const dentistHeight = Math.min(435 * unit, Math.max(0, cardTop - (titleTop + titleHeight * 0.82) + dentistOverlap));
+  const promptSize = Math.min(16, Math.max(12, 13.8 * unit));
+  const greetingFont = { fontSize: 30 * unit, lineHeight: 36 * unit };
+  return {
+    instructionsOverlay: { ...styles.instructionsOverlay, position: "relative" as const, flex: 1, paddingBottom: 0 },
+    instructionsBoxFrame: { ...styles.instructionsBoxFrame, width: cardWidth, minHeight: 286 * unit * spacing, padding: 4 * unit, borderRadius: 28 * unit },
+    instructionsBox: { ...styles.instructionsBox, minHeight: 278 * unit * spacing, paddingHorizontal: 18 * unit, paddingTop: 23 * unit * spacing, paddingBottom: 14 * unit * spacing, borderRadius: 24 * unit },
+    instructionsVisitImageFrame: { ...styles.instructionsVisitImageFrame, top: titleTop, height: titleHeight },
+    // Keep the transparent image's lower body behind the card, as in the reference.
+    dentistaInicial: { position: "absolute" as const, width: dentistHeight * 280 / 435, height: dentistHeight, right: width * 0.5 - 60 * unit - dentistHeight * 140 / 435, bottom: cardHeight - dentistOverlap, resizeMode: "contain" as const, zIndex: 1 },
+    instructionsHero: { ...styles.instructionsHero, minHeight: 52 * unit, gap: 6 * unit, marginTop: -10 * unit * spacing, marginBottom: 2 * unit },
+    instructionsGreetingLogo: { ...styles.instructionsGreetingLogo, minWidth: 0, flex: 1, flexShrink: 1, minHeight: 42 * unit },
+    instructionsGreetingLayer: { ...styles.instructionsGreetingLayer, ...greetingFont },
+    instructionsGreeting: { ...styles.instructionsGreeting, ...greetingFont, width: "100%" as const },
+    instructionsText: { ...styles.instructionsText, fontSize: 17 * unit, lineHeight: 24 * unit },
+    instructionsInvite: { ...styles.instructionsInvite, gap: 8 * unit, paddingHorizontal: 10 * unit, paddingVertical: 11 * unit * spacing, marginTop: 12 * unit * spacing, marginBottom: 10 * unit * spacing, borderRadius: 20 * unit },
+    instructionsInviteIcon: { ...styles.instructionsInviteIcon, width: 35 * unit, height: 35 * unit, flexShrink: 0 },
+    instructionsPromptLine: { ...styles.instructionsPromptLine, fontSize: promptSize, lineHeight: 19 * unit },
+    instructionsButton: { ...styles.instructionsButton, height: Math.max(44, 58 * unit), marginTop: 2 * unit, borderRadius: 29 * unit },
+    instructionsButtonGradient: { ...styles.instructionsButtonGradient, borderRadius: 29 * unit },
+    instructionsButtonIcon: { ...styles.instructionsButtonIcon, right: 30 * unit, width: 30 * unit },
+    instructionsButtonText: { ...styles.instructionsButtonText, fontSize: 27 * unit, lineHeight: 32 * unit },
+  };
+}
+
 const styles = StyleSheet.create({
   completionContainer: {
     flex: 1,
@@ -1600,7 +1675,7 @@ const styles = StyleSheet.create({
     resizeMode: "cover",
   },
   completionConfettiLayer: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     zIndex: 9,
     elevation: 9,
   },
@@ -1738,7 +1813,7 @@ const styles = StyleSheet.create({
     resizeMode: "contain",
   },
   characterSelectionOverlay: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     zIndex: 70,
     backgroundColor: "rgba(17, 74, 121, 0.28)",
     alignItems: "center",
@@ -1859,7 +1934,7 @@ const styles = StyleSheet.create({
     transform: [{ scale: 1.01 }],
   },
   characterCardGradient: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     borderRadius: 19,
   },
   characterCardIconSlot: {
@@ -1950,7 +2025,7 @@ const styles = StyleSheet.create({
     backgroundColor: "#EEF5FF",
   },
   backgroundLayer: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     width: "100%",
     height: "100%",
     resizeMode: "cover",
@@ -1996,18 +2071,6 @@ const styles = StyleSheet.create({
     left: s(18),
     bottom: s(184),
     zIndex: 4,
-  },
-  dentistaInicial: {
-    top: s(130),
-    right: s(-60),
-    bottom: 0,
-    width: s(280),
-    height: s(435),
-    resizeMode: "contain",
-    zIndex: 1,
-  },
-  dentistaInicialGirl: {
-    top: s(142),
   },
   dentistaExplicando: {
     top: s(-15),
@@ -2115,7 +2178,7 @@ const styles = StyleSheet.create({
     resizeMode: "contain",
   },
   lessonOverlay: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     zIndex: 80,
     elevation: 0,
     backgroundColor: "rgba(10, 25, 55, 0.72)",
@@ -2538,12 +2601,12 @@ const styles = StyleSheet.create({
     right: 17,
   },
   instructionsLayer: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     zIndex: 100,
     elevation: 100,
   },
   instructionsOverlay: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     zIndex: 100,
     elevation: 100,
     backgroundColor: "transparent",
@@ -2714,6 +2777,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   instructionsInviteCopy: {
+    minWidth: 0,
     flex: 1,
     flexShrink: 1,
     justifyContent: "center",
@@ -2726,7 +2790,7 @@ const styles = StyleSheet.create({
     fontSize: 13.8,
     lineHeight: 19,
     fontWeight: "800",
-    textAlign: "justify",
+    textAlign: "left",
     includeFontPadding: false,
     textShadowColor: "#07316D",
     textShadowOffset: { width: 0, height: 1 },
