@@ -211,6 +211,22 @@ export default function ConsultorioScreen({ navigation }: Props) {
   const practiceAudioRef = useRef<AudioPlayer | null>(null);
   const completionAudioRef = useRef<AudioPlayer | null>(null);
 
+  // Each navigation entry starts a fresh round, even if the screen stayed mounted.
+  useFocusEffect(
+    useCallback(() => {
+      setVisitedInstrumentIds([]);
+      setLastRewardEarned(false);
+      setShowCompletion(false);
+      setSelectedInstrumentId(null);
+      setAnimatedInstrumentId(null);
+      setLessonInstrumentId(null);
+      setLessonStage(null);
+      setShowInstructions(false);
+      setShowCharacterSelection(true);
+      dentistProgress.setValue(0);
+    }, [dentistProgress])
+  );
+
   useEffect(() => {
     void preloadConsultorioImages().catch(() => undefined);
   }, []);
@@ -583,24 +599,19 @@ export default function ConsultorioScreen({ navigation }: Props) {
     setSelectedInstrumentId(lessonInstrument.id);
     setAnimatedInstrumentId(lessonInstrument.id);
     setLastRewardEarned(!visitedInstrumentIds.includes(lessonInstrument.id));
-    saveViewedInstrument(lessonInstrument.id);
     setLessonStage("success");
   };
 
   const finishLessonCard = () => {
-    const completedInstrumentIds = new Set(visitedInstrumentIds);
-
     if (lessonInstrument) {
-      completedInstrumentIds.add(lessonInstrument.id);
+      saveViewedInstrument(lessonInstrument.id);
     }
 
     setSelectedInstrumentId(null);
     setAnimatedInstrumentId(null);
     closeLessonCard();
 
-    if (completedInstrumentIds.size >= instrumentos.length) {
-      setShowCompletion(true);
-    }
+    // The final star opens the celebration after its entrance animation finishes.
   };
 
   const playCharacterIntroAudio = async () => {
@@ -808,29 +819,14 @@ export default function ConsultorioScreen({ navigation }: Props) {
           },
         ]}
       >
-        <ImageBackground
-          source={require("../assets/shared/rectangle.png")}
-          style={styles.floorPanel}
-          imageStyle={styles.floorPanelImage}
-        >
-          {instrumentos.map((instrumento) => (
-            <Pressable
-              key={instrumento.id}
-              onPress={() => {
-                setLessonInstrumentId(instrumento.id);
-                setLessonStage("instrument");
-              }}
-              style={[
-                styles.instrumentButton,
-              ]}
-            >
-              <Image
-                source={instrumento.imageSource}
-                style={[styles.instrumentoItem, instrumento.itemStyle]}
-              />
-            </Pressable>
-          ))}
-        </ImageBackground>
+        <InstrumentTray
+          completedIds={visitedInstrumentIds}
+          onSelect={(id) => {
+            setLessonInstrumentId(id);
+            setLessonStage("instrument");
+          }}
+          onComplete={() => setShowCompletion(true)}
+        />
       </Animated.View>
 
       {lessonStage && lessonInstrument ? (
@@ -1431,33 +1427,104 @@ function CompletionScreen({
         />
       </Pressable>
 
-      <ImageBackground
-        source={require("../assets/shared/rectangle.png")}
-        style={styles.completionFloorPanelWrapper}
-        imageStyle={styles.floorPanelImage}
-      >
-        <View style={styles.floorPanel}>
-        {instrumentos.map((instrumento) => (
-          <View
-            key={instrumento.id}
-            style={[styles.instrumentButton, styles.completionInstrumentButton]}
-          >
-            <Image
-              source={instrumento.imageSource}
-              style={[styles.instrumentoItem, instrumento.itemStyle]}
-            />
-            <Image
-              source={require("../assets/jogo1/1star.png")}
-              style={styles.completionInstrumentStar}
-            />
-          </View>
-        ))}
-        </View>
-      </ImageBackground>
+      <View style={[styles.floorPanelWrapper, styles.completionTrayLayer]}>
+        <InstrumentTray completedIds={instrumentos.map(({ id }) => id)} animateStars={false} />
+      </View>
     </ImageBackground>
   );
 }
 
+
+function InstrumentTray({ completedIds, onSelect, onComplete, animateStars = true }: {
+  completedIds: string[];
+  onSelect?: (id: string) => void;
+  onComplete?: () => void;
+  animateStars?: boolean;
+}) {
+  return (
+        <ImageBackground
+          source={require("../assets/shared/rectangle.png")}
+          style={[styles.floorPanel, styles.gameFloorPanel]}
+          imageStyle={[styles.floorPanelImage, styles.gameFloorPanelImage]}
+        >
+          {instrumentos.map((instrumento) => (
+            <Pressable
+              key={instrumento.id}
+              disabled={!onSelect}
+              onPress={() => onSelect?.(instrumento.id)}
+              style={[
+                styles.instrumentButton,
+              ]}
+            >
+              <Image
+                source={instrumento.imageSource}
+                style={[styles.instrumentoItem, instrumento.itemStyle]}
+              />
+
+            </Pressable>
+          ))}
+          <View pointerEvents="none" style={styles.instrumentStarsLayer}>
+            {instrumentos.map((instrumento) => (
+              <View key={instrumento.id} style={styles.instrumentStarSlot}>
+              {completedIds.includes(instrumento.id) ? (
+                <EarnedInstrumentStar
+                  label={`${instrumento.nome} concluído`}
+                  animate={animateStars}
+                  onAnimationComplete={completedIds.length === instrumentos.length ? onComplete : undefined}
+                />
+              ) : null}
+              </View>
+            ))}
+          </View>
+        </ImageBackground>
+  );
+}
+
+function EarnedInstrumentStar({ label, onAnimationComplete, animate = true }: {
+  label: string;
+  onAnimationComplete?: () => void;
+  animate?: boolean;
+}) {
+  const progress = useRef(new Animated.Value(animate ? 0 : 1)).current;
+  const completionRef = useRef(onAnimationComplete);
+  completionRef.current = onAnimationComplete;
+
+  useEffect(() => {
+    if (!animate) return;
+    const animation = Animated.sequence([
+      Animated.spring(progress, {
+        toValue: 1,
+        friction: 5,
+        tension: 95,
+        useNativeDriver: true,
+      }),
+      Animated.delay(250),
+    ]);
+    animation.start(({ finished }) => {
+      if (finished) completionRef.current?.();
+    });
+    return () => animation.stop();
+  }, [animate, progress]);
+
+  return (
+    <Animated.View
+      accessible
+      accessibilityRole="image"
+      accessibilityLabel={label}
+      pointerEvents="none"
+      style={[styles.earnedInstrumentStar, {
+        opacity: progress.interpolate({ inputRange: [0, 0.5, 1], outputRange: [0, 1, 1], extrapolate: "clamp" }),
+        transform: [
+          { translateY: progress.interpolate({ inputRange: [0, 1], outputRange: [s(-16), 0] }) },
+          { scale: progress.interpolate({ inputRange: [0, 1], outputRange: [0.35, 1] }) },
+          { rotate: progress.interpolate({ inputRange: [0, 1], outputRange: ["-18deg", "0deg"] }) },
+        ],
+      }]}
+    >
+      <Image source={require("../assets/jogo1/1star.png")} style={styles.earnedStarImage} />
+    </Animated.View>
+  );
+}
 
 // Measure an unconstrained copy so fitting uses the device's real font metrics.
 // React Native Web does not implement adjustsFontSizeToFit; this also keeps previews faithful.
@@ -1794,23 +1861,8 @@ const styles = StyleSheet.create({
     height: 74,
     resizeMode: "contain",
   },
-  completionFloorPanelWrapper: {
-    position: "absolute",
-    left: 14,
-    right: 13,
-    bottom: 65,
-    height: 290,
+  completionTrayLayer: {
     zIndex: 10,
-  },
-  completionInstrumentButton: {
-    position: "relative",
-  },
-  completionInstrumentStar: {
-    position: "absolute",
-    bottom: -14,
-    width: 40,
-    height: 42,
-    resizeMode: "contain",
   },
   characterSelectionOverlay: {
     ...StyleSheet.absoluteFill,
@@ -2171,6 +2223,43 @@ const styles = StyleSheet.create({
   instrumentButton: {
     alignItems: "center",
     justifyContent: "flex-end",
+  },
+  gameFloorPanel: {
+    paddingLeft: s(8),
+    paddingRight: s(16),
+  },
+  // The asset includes large outer margins. Align its visible blue border with the reference.
+  gameFloorPanelImage: {
+    width: s(614),
+    height: s(440),
+    left: s(-129),
+    top: s(-8),
+  },
+  // Match the instrument row without letting stars participate in its layout.
+  instrumentStarsLayer: {
+    position: "absolute",
+    left: s(8),
+    right: s(16),
+    bottom: s(16),
+    flexDirection: "row",
+    justifyContent: "space-between",
+  },
+  instrumentStarSlot: {
+    width: s(60),
+    alignItems: "center",
+  },
+  earnedStarImage: {
+    width: "100%",
+    height: "100%",
+    resizeMode: "contain",
+  },
+  earnedInstrumentStar: {
+    position: "absolute",
+    bottom: s(-14),
+    width: s(40),
+    height: s(42),
+    alignItems: "center",
+    justifyContent: "center",
   },
   instrumentoItem: {
     width: s(60),
