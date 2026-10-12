@@ -19,6 +19,7 @@ import { useThemeMusic } from "../contexts/ThemeMusicContext";
 import { getCurrentUserProfile } from "../services/progress";
 import { auth } from "../services/firebase";
 import { getScreenMetrics } from "../utils/responsive";
+import AccountDeletionControl from "./AccountDeletionControl";
 
 type Props = NativeStackScreenProps<RootStackParamList, "SelecaoJogos">;
 type GreetingGender = "Masculino" | "Feminino" | null;
@@ -27,6 +28,11 @@ const { scale: s, moderateScale: ms } = getScreenMetrics();
 export default function SelecaoJogosScreen({ navigation }: Props) {
   const [greeting, setGreeting] = useState("Seja bem-vindo!");
   const [greetingGender, setGreetingGender] = useState<GreetingGender>(null);
+  const [accountOpen, setAccountOpen] = useState(false);
+  const [accountDeleted, setAccountDeleted] = useState(false);
+  const [accountMenuOpen, setAccountMenuOpen] = useState(false);
+  const [profileReady, setProfileReady] = useState(false);
+  const hasAccount = !!auth.currentUser && !auth.currentUser.isAnonymous;
   const { isPlaying, startMusic, toggleMusic } = useThemeMusic();
 
   useEffect(() => {
@@ -36,6 +42,7 @@ export default function SelecaoJogosScreen({ navigation }: Props) {
   useEffect(() => {
     const loadProfile = async () => {
       const profile = await getCurrentUserProfile();
+      setProfileReady(true);
 
       if (!profile) {
         setGreeting("Seja bem-vindo!");
@@ -51,10 +58,14 @@ export default function SelecaoJogosScreen({ navigation }: Props) {
       setGreetingGender(gender === "Feminino" ? "Feminino" : "Masculino");
     };
 
-    void loadProfile();
+    void loadProfile().catch(() => {
+      setProfileReady(true);
+      Alert.alert("Não foi possível carregar sua conta", "Verifique sua conexão e tente novamente.");
+    });
   }, []);
 
   const handleGamePress = (gameId: string, title: string) => {
+    if (!profileReady) return;
     if (gameId === "jogo-1") {
       navigation.navigate("Consultorio");
       return;
@@ -70,7 +81,7 @@ export default function SelecaoJogosScreen({ navigation }: Props) {
 
   const handleBackToLogin = async () => {
     await signOut(auth).catch(() => null);
-    navigation.replace("Login");
+    navigation.reset({ index: 0, routes: [{ name: "Login" }] });
   };
 
   return (
@@ -109,7 +120,19 @@ export default function SelecaoJogosScreen({ navigation }: Props) {
             </Pressable>
           </View>
 
-          <View style={styles.greetingCard}>
+          <View style={styles.accountCardArea}>
+          <Pressable
+            style={styles.greetingCard}
+            disabled={!hasAccount}
+            accessibilityRole={hasAccount ? "button" : undefined}
+            accessibilityLabel={hasAccount ? "Abrir opções da minha conta" : undefined}
+            accessibilityState={hasAccount ? { expanded: accountMenuOpen } : undefined}
+            onPress={() => {
+              if (auth.currentUser && !auth.currentUser.isAnonymous) {
+                setAccountMenuOpen((open) => !open);
+              }
+            }}
+          >
             <View
               style={[
                 styles.greetingIconCircle,
@@ -127,6 +150,27 @@ export default function SelecaoJogosScreen({ navigation }: Props) {
         >
           {greeting}
         </Text>
+          </Pressable>
+          {hasAccount && accountMenuOpen && (
+            <Pressable
+              style={({ pressed }) => [
+                styles.deleteAccountButton,
+                pressed && styles.deleteAccountButtonPressed,
+              ]}
+              accessibilityRole="button"
+              accessibilityLabel="Excluir minha conta"
+              accessibilityHint="Abre a confirmação antes de excluir sua conta"
+              hitSlop={{ top: s(8), bottom: s(8), left: s(4), right: s(4) }}
+              onPress={() => {
+                if (auth.currentUser && !auth.currentUser.isAnonymous) setAccountOpen(true);
+              }}
+            >
+              <Ionicons name="trash-outline" size={s(22)} color="#A52B38" />
+              <Text style={styles.deleteAccountText} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.85}>
+                Excluir minha conta
+              </Text>
+            </Pressable>
+          )}
           </View>
 
           <View style={styles.logoArea}>
@@ -157,6 +201,22 @@ export default function SelecaoJogosScreen({ navigation }: Props) {
           </View>
         </View>
       </SafeAreaView>
+      {(hasAccount || accountOpen) && <AccountDeletionControl
+        visible={accountOpen}
+        success={accountDeleted}
+        iconBackgroundColor={greetingGender === "Feminino" ? "#fd92c7" : "#2F80ED"}
+        onClose={() => setAccountOpen(false)}
+        onDeleted={() => {
+          setAccountDeleted(true);
+          setAccountMenuOpen(false);
+          setGreeting("Seja bem-vindo!");
+          setGreetingGender(null);
+        }}
+        onContinue={() => {
+          setAccountOpen(false);
+          navigation.reset({ index: 0, routes: [{ name: "Login" }] });
+        }}
+      />}
     </ImageBackground>
   );
 }
@@ -212,7 +272,7 @@ const styles = StyleSheet.create({
   },
   backIconButton: {
     position: "absolute",
-    top: s(56),
+    top: s(66),
     left: s(18),
     width: s(42),
     height: s(42),
@@ -236,10 +296,15 @@ const styles = StyleSheet.create({
     zIndex: 50,
     alignItems: "flex-end",
   },
-  greetingCard: {
+  accountCardArea: {
     position: "absolute",
-    top: s(50),
+    top: s(60),
     left: s(68),
+    zIndex: 45,
+    elevation: 45,
+    paddingBottom: s(8),
+  },
+  greetingCard: {
     width: s(200),
     minHeight: s(55),
     borderRadius: s(30),
@@ -263,6 +328,35 @@ const styles = StyleSheet.create({
     backgroundColor: "#2F80ED",
     alignItems: "center",
     justifyContent: "center",
+  },
+  deleteAccountButton: {
+    width: s(175),
+    height: s(40),
+    marginTop: s(8),
+    marginLeft: s(8),
+    paddingHorizontal: s(14),
+    flexDirection: "row",
+    alignItems: "center",
+    gap: s(8),
+    borderRadius: s(20),
+    backgroundColor: "#FBE1E4",
+    borderWidth: 1.1,
+    borderColor: "#C66472",
+    borderLeftWidth: 1.1,
+    borderLeftColor: "#C66472",
+  },
+  deleteAccountButtonPressed: {
+    backgroundColor: "#F6CFD3",
+  },
+  deleteAccountText: {
+    flex: 1,
+    minWidth: 0,
+    color: "#A52B38",
+    fontSize: s(13),
+    lineHeight: s(20),
+    fontWeight: "600",
+    textAlign: "center",
+    includeFontPadding: false,
   },
   greetingIconMale: {
     backgroundColor: "#2F80ED",
@@ -298,7 +392,7 @@ const styles = StyleSheet.create({
   },
   logoArea: {
     position: "absolute",
-    top: s(-150),
+    top: s(-130),
     left: s(36),
     right: s(36),
     height: s(805),

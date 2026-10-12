@@ -52,6 +52,22 @@ export default function CadastroScreen({ navigation }: Props) {
   const { stopMusic } = useThemeMusic();
   const screenShift = useRef(new Animated.Value(0)).current;
   const passwordFocusedRef = useRef(false);
+  const birthYearInputRef = useRef<TextInput>(null);
+  const emailInputRef = useRef<TextInput>(null);
+  const passwordInputRef = useRef<TextInput>(null);
+  const confirmPasswordInputRef = useRef<TextInput>(null);
+  const focusEmailAfterGenderRef = useRef(false);
+
+  const focusEmailAfterGender = () => {
+    if (!focusEmailAfterGenderRef.current) return;
+    focusEmailAfterGenderRef.current = false;
+    emailInputRef.current?.focus();
+  };
+  const finishGenderSelection = () => {
+    focusEmailAfterGenderRef.current = true;
+    setGeneroModal(false);
+    if (Platform.OS !== "ios") requestAnimationFrame(focusEmailAfterGender);
+  };
 
   useFocusEffect(
     useCallback(() => {
@@ -112,7 +128,10 @@ export default function CadastroScreen({ navigation }: Props) {
   const handleCadastro = async (values: CadastroValues) => {
     try {
       const snapshot = await getDocs(collection(db, "usuarios"));
-      const codigo = snapshot.size + 1;
+      const codigo = snapshot.docs.reduce((maximum, document) => {
+        const code = Number(document.data().codigo);
+        return Number.isSafeInteger(code) && code > maximum ? code : maximum;
+      }, 0) + 1;
 
       const credential = await createUserWithEmailAndPassword(
         auth,
@@ -257,6 +276,9 @@ export default function CadastroScreen({ navigation }: Props) {
                           }
                           onChangeText={handleChange("nome")}
                           value={values.nome}
+                          returnKeyType="next"
+                          submitBehavior="submit"
+                          onSubmitEditing={() => birthYearInputRef.current?.focus()}
                         />
                       </View>
 
@@ -294,6 +316,14 @@ export default function CadastroScreen({ navigation }: Props) {
                             setFieldValue("dataNascimento", formatBirthYear(text))
                           }
                           value={values.dataNascimento}
+                          ref={birthYearInputRef}
+                          returnKeyType="next"
+                          submitBehavior="submit"
+                          onSubmitEditing={() => {
+                            Keyboard.dismiss();
+                            setFieldTouched("genero", true);
+                            setGeneroModal(true);
+                          }}
                         />
                       </View>
 
@@ -366,6 +396,10 @@ export default function CadastroScreen({ navigation }: Props) {
                           autoCapitalize="none"
                           onChangeText={handleChange("email")}
                           value={values.email}
+                          ref={emailInputRef}
+                          returnKeyType="next"
+                          submitBehavior="submit"
+                          onSubmitEditing={() => passwordInputRef.current?.focus()}
                         />
                       </View>
 
@@ -383,8 +417,12 @@ export default function CadastroScreen({ navigation }: Props) {
 
                         <View style={styles.inputFieldArea}>
                           <TextInput
+                            ref={passwordInputRef}
                             style={[styles.input, styles.passwordInput]}
                             numberOfLines={1}
+                            returnKeyType="next"
+                            submitBehavior="submit"
+                            onSubmitEditing={() => confirmPasswordInputRef.current?.focus()}
                             placeholder={
                               showSenhaSubmitError && errors.senha
                                 ? errors.senha
@@ -437,7 +475,14 @@ export default function CadastroScreen({ navigation }: Props) {
 
                         <View style={styles.inputFieldArea}>
                           <TextInput
+                            ref={confirmPasswordInputRef}
                             style={[styles.input, styles.passwordInput]}
+                            returnKeyType="done"
+                            submitBehavior="blurAndSubmit"
+                            onSubmitEditing={() => {
+                              setShowSenhaSubmitError(true);
+                              handleSubmit();
+                            }}
                             placeholder={
                               showSenhaSubmitError && errors.confirmaSenha
                                 ? errors.confirmaSenha
@@ -502,6 +547,7 @@ export default function CadastroScreen({ navigation }: Props) {
                         transparent
                         visible={generoModal}
                         animationType="fade"
+                        onDismiss={focusEmailAfterGender}
                       >
                         <View style={styles.modalOverlay}>
                           <View style={styles.modalBox}>
@@ -513,7 +559,7 @@ export default function CadastroScreen({ navigation }: Props) {
                               style={styles.modalOption}
                               onPress={() => {
                                 setFieldValue("genero", "Masculino");
-                                setGeneroModal(false);
+                                finishGenderSelection();
                               }}
                             >
                               <Text>Masculino</Text>
@@ -523,7 +569,7 @@ export default function CadastroScreen({ navigation }: Props) {
                               style={styles.modalOption}
                               onPress={() => {
                                 setFieldValue("genero", "Feminino");
-                                setGeneroModal(false);
+                                finishGenderSelection();
                               }}
                             >
                               <Text>Feminino</Text>

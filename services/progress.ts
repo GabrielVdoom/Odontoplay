@@ -1,4 +1,5 @@
-import { doc, getDoc, setDoc } from "firebase/firestore";
+import { doc, getDoc, updateDoc } from "firebase/firestore";
+import { isAccountDeletionInProgress } from "./accountDeletion";
 import { auth, db } from "./firebase";
 
 export type CharacterOption = "menina" | "menino";
@@ -47,17 +48,16 @@ export async function getCurrentUserProfile() {
 export async function saveUserPreferences(preferences: UserPreferences) {
   const user = auth.currentUser;
 
-  if (!user) {
+  if (!user || isAccountDeletionInProgress()) {
     return;
   }
 
-  await setDoc(
+  await updateDoc(
     doc(db, "usuarios", user.uid),
     {
       preferencias: preferences,
       ultimoAcesso: new Date().toISOString(),
-    },
-    { merge: true }
+    }
   );
 }
 
@@ -67,7 +67,7 @@ export async function saveGameProgress(
 ) {
   const user = auth.currentUser;
 
-  if (!user) {
+  if (!user || isAccountDeletionInProgress()) {
     return;
   }
 
@@ -83,7 +83,9 @@ export async function saveGameProgress(
   const nextBest = Math.max(previousBest, progress.estrelas);
   const now = new Date().toISOString();
 
-  await setDoc(
+  if (!snapshot.exists() || isAccountDeletionInProgress()) return;
+
+  await updateDoc(
     doc(db, "usuarios", user.uid),
     {
       progresso: {
@@ -98,7 +100,6 @@ export async function saveGameProgress(
         },
       },
       ultimoAcesso: now,
-    },
-    { merge: true }
+    }
   );
 }

@@ -40,6 +40,7 @@ export default function LoginScreen({ navigation }: Props) {
   const { stopMusic } = useThemeMusic();
   const screenShift = useRef(new Animated.Value(0)).current;
   const passwordFocusedRef = useRef(false);
+  const passwordInputRef = useRef<TextInput>(null);
 
   useFocusEffect(
     useCallback(() => {
@@ -80,9 +81,15 @@ export default function LoginScreen({ navigation }: Props) {
         values.password
       );
 
-      await updateDoc(doc(db, "usuarios", credential.user.uid), {
-        ultimoAcesso: new Date().toISOString(),
-      });
+      try {
+        await updateDoc(doc(db, "usuarios", credential.user.uid), {
+          ultimoAcesso: new Date().toISOString(),
+        });
+      } catch (error) {
+        // A partial deletion may leave Auth intact with no profile. Allow access
+        // to the account deletion control without recreating the document.
+        if ((error as { code?: string }).code !== "not-found") throw error;
+      }
 
       navigation.replace("SelecaoJogos");
     } catch {
@@ -155,6 +162,9 @@ export default function LoginScreen({ navigation }: Props) {
                     value={values.email}
                     autoCapitalize="none"
                     keyboardType="email-address"
+                    returnKeyType="next"
+                    submitBehavior="submit"
+                    onSubmitEditing={() => passwordInputRef.current?.focus()}
                   />
                 </View>
 
@@ -169,6 +179,7 @@ export default function LoginScreen({ navigation }: Props) {
                   </View>
 
                   <TextInput
+                    ref={passwordInputRef}
                     style={styles.input}
                     placeholder={
                       touched.password && errors.password
@@ -183,6 +194,9 @@ export default function LoginScreen({ navigation }: Props) {
                     }
                     onChangeText={handleChange("password")}
                     value={values.password}
+                    returnKeyType="go"
+                    submitBehavior="blurAndSubmit"
+                    onSubmitEditing={() => handleSubmit()}
                   />
 
                   <Pressable

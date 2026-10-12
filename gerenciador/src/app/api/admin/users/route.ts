@@ -45,7 +45,10 @@ export async function POST(request: Request) {
         }
 
         const usersSnapshot = await adminDb.collection(USERS_COLLECTION).get();
-        const codigo = usersSnapshot.size + 1;
+        const codigo = usersSnapshot.docs.reduce((maximum, document) => {
+            const code = Number(document.data().codigo);
+            return Number.isSafeInteger(code) && code > maximum ? code : maximum;
+        }, 0) + 1;
         const createdUser = await adminAuth.createUser({
             email,
             password: senha,
