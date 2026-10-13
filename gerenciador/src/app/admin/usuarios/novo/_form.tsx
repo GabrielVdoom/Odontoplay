@@ -36,8 +36,9 @@ export default function UsuarioForm() {
             {({handleChange, handleSubmit, isSubmitting, isValid, errors, setFieldValue, values}) => (
                 <form className="grid gap-2 lg:grid-cols-2">
                     <AppInput placeholder="Nome da criança" label="Nome:" name="nome" onChange={handleChange} icon="person" error={errors.nome} value={values.nome} />
-                    <AppInput placeholder="Ano de nascimento" label="Ano de nascimento:" name="dataNascimento" value={values.dataNascimento} onChange={(e) => setFieldValue("dataNascimento", formatBirthYear(e.target.value))} icon="calendar" error={errors.dataNascimento} />
-                    <AppSelect label="Gênero:" onChange={handleChange} name="genero" value={values.genero}>
+                    <AppInput placeholder="Ano de nascimento (opcional)" label="Ano de nascimento (opcional):" name="dataNascimento" value={values.dataNascimento} onChange={(e) => setFieldValue("dataNascimento", formatBirthYear(e.target.value))} icon="calendar" error={errors.dataNascimento} />
+                    <AppSelect label="Gênero (opcional):" onChange={handleChange} name="genero" value={values.genero}>
+                        <option value="">Não informado</option>
                         <option value="Masculino">Masculino</option>
                         <option value="Feminino">Feminino</option>
                     </AppSelect>

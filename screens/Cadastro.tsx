@@ -109,13 +109,12 @@ export default function CadastroScreen({ navigation }: Props) {
   const cadastroSchema = Yup.object().shape({
     nome: Yup.string().required("Nome obrigatório"),
     dataNascimento: Yup.string()
-      .required("Ano obrigatório")
       .test(
         "valid-birth-year",
         "Ano inválido",
-        (value) => !!value && isValidBirthYear(value)
+        (value) => !value || isValidBirthYear(value)
       ),
-    genero: Yup.string().required("Selecione o gênero"),
+    genero: Yup.string().oneOf(["", "Masculino", "Feminino"]),
     email: Yup.string().email("Email inválido").required("Email obrigatório"),
     senha: Yup.string()
       .min(6, "Mínimo 6 caracteres")
@@ -145,7 +144,7 @@ export default function CadastroScreen({ navigation }: Props) {
         codigo,
         nome: values.nome.trim(),
         dataNascimento: formatBirthYear(values.dataNascimento),
-        genero: values.genero,
+        genero: values.genero === "Masculino" || values.genero === "Feminino" ? values.genero : "",
         email: values.email.trim().toLowerCase(),
         status: "Ativo",
         preferencias: {
@@ -303,7 +302,7 @@ export default function CadastroScreen({ navigation }: Props) {
                           placeholder={
                             touched.dataNascimento && errors.dataNascimento
                               ? errors.dataNascimento
-                              : "Ano de nascimento"
+                              : "Ano de nascimento (opcional)"
                           }
                           placeholderTextColor={
                             touched.dataNascimento && errors.dataNascimento
@@ -363,7 +362,7 @@ export default function CadastroScreen({ navigation }: Props) {
                           >
                             {touched.genero && errors.genero
                               ? errors.genero
-                              : values.genero || "Selecione o gênero"}
+                              : values.genero || "Gênero (opcional)"}
                           </Text>
                         </Pressable>
                       </View>

@@ -60,7 +60,7 @@ function mapUser(id: string, data: Record<string, unknown>): RegisteredUser {
         codigo: Number(data.codigo ?? 0),
         nome: String(data.nome ?? ""),
         dataNascimento: formatBirthYear(data.dataNascimento),
-        genero: (data.genero === "Feminino" ? "Feminino" : "Masculino"),
+        genero: data.genero === "Feminino" || data.genero === "Masculino" ? data.genero : "",
         email: String(data.email ?? ""),
         status: (["Ativo", "Pendente", "Inativo"].includes(String(data.status)) ? data.status : "Ativo") as UserStatus,
         criadoEm: String(data.criadoEm ?? ""),

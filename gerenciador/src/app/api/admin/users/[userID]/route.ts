@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { adminAuth, adminDb } from "@/lib/firebase-admin";
 import { isAdminEmail } from "@/services/admin-access";
+import { birthYearSchema } from "@/helpers/user-form";
 
 type RouteContext = {
     params: Promise<{
@@ -47,6 +48,11 @@ export async function PATCH(request: Request, { params }: RouteContext) {
         const user = await request.json();
         const email = String(user.email ?? "").trim().toLowerCase();
         const senha = String(user.senha ?? "");
+        const dataNascimento = normalizeBirthYear(user.dataNascimento);
+
+        if ((user.dataNascimento && !dataNascimento) || !await birthYearSchema.isValid(dataNascimento)) {
+            return NextResponse.json({ error: "Ano de nascimento inválido." }, { status: 400 });
+        }
 
         if (!email) {
             return NextResponse.json({ error: "Informe um email valido." }, { status: 400 });
@@ -68,8 +74,8 @@ export async function PATCH(request: Request, { params }: RouteContext) {
         await adminAuth.updateUser(userID, authUpdate);
         await adminDb.collection("usuarios").doc(userID).update({
             nome: String(user.nome ?? "").trim(),
-            dataNascimento: normalizeBirthYear(user.dataNascimento),
-            genero: user.genero === "Feminino" ? "Feminino" : "Masculino",
+            dataNascimento,
+            genero: user.genero === "Feminino" || user.genero === "Masculino" ? user.genero : "",
             email,
             status: normalizeStatus(user.status),
         });

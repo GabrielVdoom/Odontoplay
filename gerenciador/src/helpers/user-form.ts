@@ -11,17 +11,16 @@ export type UserFormValues = Pick<
 export const defaultUserFormValues: UserFormValues = {
   nome: "",
   dataNascimento: "",
-  genero: "Masculino",
+  genero: "",
   email: "",
   senha: "",
   status: "Ativo",
 };
 
-const birthYearSchema = Yup.string()
-  .required("Campo obrigatório")
-  .matches(/^\d{4}$/, "Informe apenas o ano")
+export const birthYearSchema = Yup.string()
+  .matches(/^\d{4}$/, { message: "Informe apenas o ano", excludeEmptyString: true })
   .test("valid-birth-year", "Ano inválido", (value) => {
-    if (!value) return false;
+    if (!value) return true;
 
     const year = Number(value);
     const currentYear = new Date().getFullYear();
@@ -32,7 +31,7 @@ const birthYearSchema = Yup.string()
 export const userFormSchema = Yup.object({
   nome: Yup.string().required("Campo obrigatório"),
   dataNascimento: birthYearSchema,
-  genero: Yup.string().required("Campo obrigatório"),
+  genero: Yup.string().oneOf(["", "Masculino", "Feminino"]),
   email: Yup.string().required("Campo obrigatório").email("Email inválido"),
   senha: Yup.string().required("Campo obrigatório").min(6, "Mínimo de 6 caracteres"),
   status: Yup.string().required("Campo obrigatório"),
@@ -41,9 +40,9 @@ export const userFormSchema = Yup.object({
 export const editUserFormSchema = Yup.object({
   nome: Yup.string().required("Campo obrigatório"),
   dataNascimento: birthYearSchema,
-  genero: Yup.string().required("Campo obrigatório"),
+  genero: Yup.string().oneOf(["", "Masculino", "Feminino"]),
   email: Yup.string().required("Campo obrigatório").email("Email inválido"),
-  senha: Yup.string().min(6, "Mínimo de 6 caracteres"),
+  senha: Yup.string().test("optional-password", "Mínimo de 6 caracteres", value => !value || value.length >= 6),
   status: Yup.string().required("Campo obrigatório"),
 });
 

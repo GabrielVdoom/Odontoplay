@@ -87,7 +87,7 @@ export default function DashboardPage() {
                 <div className="flex items-start justify-between gap-3">
                   <div>
                     <h4 className="text-lg font-semibold text-slate-950">{user.nome}</h4>
-                    <p className="mt-1 text-sm text-slate-500">Ano: {user.dataNascimento}</p>
+                    <p className="mt-1 text-sm text-slate-500">Ano: {user.dataNascimento || "Não informado"}</p>
                   </div>
                   <span className={`rounded-full px-3 py-1 text-xs font-semibold ${statusStyles[user.status]}`}>
                     {user.status}

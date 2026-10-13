@@ -5,7 +5,7 @@ export type RegisteredUser = {
   codigo: number;
   nome: string;
   dataNascimento: string;
-  genero: "Masculino" | "Feminino";
+  genero: "Masculino" | "Feminino" | "";
   email: string;
   status: UserStatus;
   criadoEm: string;

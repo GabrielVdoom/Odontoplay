@@ -135,7 +135,7 @@ export default function UserList() {
                                 </td>
                                 <td className="border-b border-gray-100 px-4 py-4 text-sm">
                                     <p className="font-semibold text-slate-900">{user.nome}</p>
-                                    <p className="mt-1 text-slate-500">Ano: {user.dataNascimento}</p>
+                                    <p className="mt-1 text-slate-500">Ano: {user.dataNascimento || "Não informado"}</p>
                                 </td>
                                 <td className="border-b border-gray-100 px-4 py-4 text-sm">
                                     <p className="font-medium text-slate-900">Criado em {formatDateTime(user.criadoEm)}</p>
@@ -144,7 +144,7 @@ export default function UserList() {
                                 <td className="border-b border-gray-100 px-4 py-4 text-sm">
                                     <p>{user.email}</p>
                                 </td>
-                                <td className="border-b border-gray-100 px-4 py-4 text-sm">{user.genero}</td>
+                                <td className="border-b border-gray-100 px-4 py-4 text-sm">{user.genero || "Não informado"}</td>
                                 <td className="border-b border-gray-100 px-4 py-4 text-sm">
                                     <span className={`rounded-full px-3 py-1 text-xs font-semibold ${statusBadge[user.status]}`}>
                                         {user.status}

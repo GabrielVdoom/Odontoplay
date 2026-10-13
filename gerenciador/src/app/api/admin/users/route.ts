@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { adminAuth, adminDb } from "@/lib/firebase-admin";
 import { isAdminEmail } from "@/services/admin-access";
+import { birthYearSchema } from "@/helpers/user-form";
 
 const USERS_COLLECTION = "usuarios";
 
@@ -36,6 +37,11 @@ export async function POST(request: Request) {
         const user = await request.json();
         const email = String(user.email ?? "").trim().toLowerCase();
         const senha = String(user.senha ?? "");
+        const dataNascimento = normalizeBirthYear(user.dataNascimento);
+
+        if ((user.dataNascimento && !dataNascimento) || !await birthYearSchema.isValid(dataNascimento)) {
+            return NextResponse.json({ error: "Ano de nascimento inválido." }, { status: 400 });
+        }
 
         if (!email || !senha || senha.length < 6) {
             return NextResponse.json(
@@ -58,8 +64,8 @@ export async function POST(request: Request) {
         await adminDb.collection(USERS_COLLECTION).doc(createdUser.uid).set({
             codigo,
             nome: String(user.nome ?? "").trim(),
-            dataNascimento: normalizeBirthYear(user.dataNascimento),
-            genero: user.genero === "Feminino" ? "Feminino" : "Masculino",
+            dataNascimento,
+            genero: user.genero === "Feminino" || user.genero === "Masculino" ? user.genero : "",
             email,
             status: ["Ativo", "Pendente", "Inativo"].includes(String(user.status)) ? user.status : "Ativo",
             criadoEm: now,

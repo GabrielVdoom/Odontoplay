@@ -55,7 +55,7 @@ export default function SelecaoJogosScreen({ navigation }: Props) {
       const gender = String(profile.genero ?? "");
 
       setGreeting(firstName ? `Olá, ${firstName}!` : "Seja bem-vindo!");
-      setGreetingGender(gender === "Feminino" ? "Feminino" : "Masculino");
+      setGreetingGender(gender === "Feminino" || gender === "Masculino" ? gender : null);
     };
 
     void loadProfile().catch(() => {
