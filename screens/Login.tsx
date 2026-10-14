@@ -28,7 +28,7 @@ const { width, height, scale: s, moderateScale: ms } = getScreenMetrics();
 
 // RESPONSIVO
 const FORM_TOP = s(435);
-const REGISTER_TOP = s(665);
+const REGISTER_TOP = s(663);
 const REGISTER_WIDTH = s(267);
 const DEMO_TOP = s(741);
 const PASSWORD_FOCUS_SHIFT = -Math.min(height * 0.18, 145);
@@ -410,7 +410,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     flexDirection: "row",
-    gap: s(10),
+    gap: s(5),
     backgroundColor: "#FFF9E8",
     borderRadius: s(20),
     borderWidth: 1.3,
