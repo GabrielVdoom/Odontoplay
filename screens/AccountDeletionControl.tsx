@@ -1,22 +1,25 @@
+import { useSceneMetrics } from "../utils/responsive";
 import React, { useRef, useState } from "react";
 import { ActivityIndicator, Keyboard, KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { FontAwesome } from "@expo/vector-icons";
 import { accountDeletionMessage, deleteCurrentAccount } from "../services/accountDeletion";
-import { getScreenMetrics } from "../utils/responsive";
+import { getPhoneScreenMetrics } from "../utils/responsive";
 
-const { scale: s, moderateScale: ms } = getScreenMetrics();
 export default function AccountDeletionControl({ visible, success = false, iconBackgroundColor = "#2F80ED", onClose, onDeleted, onContinue }: {
   visible: boolean; onClose: () => void; onDeleted: () => void;
   success?: boolean; onContinue: () => void;
   iconBackgroundColor?: string;
 }) {
+  const metrics = useSceneMetrics();
+  const styles = metrics.isTabletLayout ? createTabletStyles(metrics) : createPhoneStyles(getPhoneScreenMetrics(metrics));
+
   const [error, setError] = useState("");
   const [needsPassword, setNeedsPassword] = useState(false);
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
   const [availableHeight, setAvailableHeight] = useState<number | null>(null);
   const [passwordFocused, setPasswordFocused] = useState(false);
-  const scrollRef = useRef<ScrollView>(null);
+  const scrollRef = useRef<React.ComponentRef<typeof ScrollView>>(null);
   const lock = useRef(false);
   const close = () => {
     if (lock.current || success) return;
@@ -98,7 +101,8 @@ export default function AccountDeletionControl({ visible, success = false, iconB
     </Modal>
   );
 }
-const styles = StyleSheet.create({
+function createPhoneStyles({ scale: s, moderateScale: ms }: ReturnType<typeof getPhoneScreenMetrics>) {
+return StyleSheet.create({
   backdrop: { flex: 1, backgroundColor: "rgba(5, 47, 121, 0.65)" },
   keyboardArea: { flex: 1 },
   overlay: { flex: 1, justifyContent: "center", alignItems: "center", padding: 24 },
@@ -125,3 +129,37 @@ const styles = StyleSheet.create({
   cancelText: { color: "#173A6A", fontSize: ms(16), fontWeight: "bold" },
   loading: { padding: 8, gap: 10, alignItems: "center" },
 });
+}
+
+
+// Tablet-only styles. The phone styles above are preserved from the pre-tablet snapshot.
+function createTabletStyles(metrics: ReturnType<typeof useSceneMetrics>) {
+const { scale: s, moderateScale: ms } = metrics;
+return StyleSheet.create({
+  backdrop: { flex: 1, backgroundColor: "rgba(5, 47, 121, 0.65)" },
+  keyboardArea: { flex: 1 },
+  overlay: { flex: 1, justifyContent: "center", alignItems: "center", padding: 24 },
+  box: {
+    width: "94%", maxWidth: 460, maxHeight: "90%",
+    flexShrink: 1,
+    backgroundColor: "#FFF", borderRadius: 22, padding: 18,
+    borderWidth: 3, borderColor: "#BAD4EA",
+    shadowColor: "#173A6A",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.16, shadowRadius: 12, elevation: 6,
+  },
+  scroll: { flexGrow: 0, flexShrink: 1, minHeight: 0 },
+  icon: { width: s(40), height: s(40), borderRadius: s(20), alignSelf: "center", alignItems: "center", justifyContent: "center", marginBottom: 8 },
+  title: { color: "#173A6A", fontSize: ms(21), fontWeight: "bold", textAlign: "center", marginBottom: 10 },
+  body: { color: "#173A6A", fontSize: ms(15), lineHeight: ms(23), textAlign: "center", marginBottom: 10 },
+  error: { color: "#B42318", fontSize: ms(15), textAlign: "center", marginBottom: 10 },
+  input: { borderWidth: 1, borderColor: "#D6EAF8", borderRadius: 24, paddingHorizontal: 16, paddingVertical: 10, fontSize: ms(16), marginBottom: 10, color: "#173A6A" },
+  button: { borderRadius: 24, minHeight: 48, padding: 10, alignItems: "center", justifyContent: "center", marginTop: 6 },
+  danger: { backgroundColor: "#C0392B" },
+  primary: { backgroundColor: "#2F80ED" },
+  cancel: { backgroundColor: "#EDF6FF", borderWidth: 1, borderColor: "#D6EAF8" },
+  buttonText: { color: "#FFF", fontSize: ms(16), fontWeight: "bold", textAlign: "center" },
+  cancelText: { color: "#173A6A", fontSize: ms(16), fontWeight: "bold" },
+  loading: { padding: 8, gap: 10, alignItems: "center" },
+});
+}

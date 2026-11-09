@@ -1,7 +1,9 @@
+import { useSceneMetrics, useSceneBackdrop, FRIENDLY_FONT, SceneOverlay, getTabletConsultorioLayout, getTabletContentScale, imagePointY } from "../utils/responsive";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Animated,
   BackHandler,
+  Easing,
   Image,
   ImageBackground,
   ImageSourcePropType,
@@ -29,7 +31,7 @@ import {
 } from "../contexts/ThemeMusicContext";
 import { preloadConsultorioImages } from "../services/imagePreload";
 import { saveGameProgress } from "../services/progress";
-import { getScreenMetrics } from "../utils/responsive";
+import { getPhoneScreenMetrics } from "../utils/responsive";
 
 type Props = NativeStackScreenProps<RootStackParamList, "Consultorio">;
 
@@ -44,13 +46,11 @@ type Jogo1Objeto = {
 
 type ConsultorioCharacter = "menino" | "menina";
 
+const gameFont = Platform.OS === "web" ? FRIENDLY_FONT : "Nunito_800ExtraBold";
+
+const PHONE_DENTIST_SCALE = 1.06;
+
 const instrumentTargetPosition = { left: 100, top: 342 };
-const {
-  width: screenWidth,
-  height: screenHeight,
-  scale: s,
-  moderateScale: ms,
-} = getScreenMetrics();
 const friendlyTextFont = Platform.select({
   android: "sans-serif-rounded",
   ios: "Avenir Next",
@@ -190,6 +190,11 @@ const practiceTextsByInstrumentId: Record<string, string> = {
 };
 
 export default function ConsultorioScreen({ navigation }: Props) {
+  const metrics = useSceneMetrics();
+  const tablet = metrics.isTabletLayout;
+  const styles = tablet ? createTabletStyles(metrics) : createPhoneStyles(getPhoneScreenMetrics(metrics));
+  const motion = tablet ? metrics.scale : (value: number) => value;
+
   const [selectedInstrumentId, setSelectedInstrumentId] = useState<string | null>(null);
   const [animatedInstrumentId, setAnimatedInstrumentId] = useState<string | null>(null);
   const [showInstructions, setShowInstructions] = useState(false);
@@ -200,12 +205,23 @@ export default function ConsultorioScreen({ navigation }: Props) {
   const [visitedInstrumentIds, setVisitedInstrumentIds] = useState<string[]>([]);
   const [lastRewardEarned, setLastRewardEarned] = useState(false);
   const [showCompletion, setShowCompletion] = useState(false);
+  const isGirlCharacter = selectedCharacter === "menina";
+  const completionBackground = isGirlCharacter
+    ? require("../assets/jogo1/background_meninafeliz3.png")
+    : require("../assets/jogo1/background_meninofeliz.png");
+  const gameplayBackground = isGirlCharacter
+    ? require("../assets/jogo1/background_menina3.png")
+    : require("../assets/jogo1/background_menino3.png");
+  useSceneBackdrop(showCompletion ? completionBackground : gameplayBackground);
   const { setMusicVolume } = useThemeMusic();
   const dentistProgress = useRef(new Animated.Value(0)).current;
+  const completionProgress = useRef(new Animated.Value(0)).current;
   const instructionsProgress = useRef(new Animated.Value(1)).current;
   const initialDentistProgress = useRef(new Animated.Value(0)).current;
   const selectedInstrumentProgress = useRef(new Animated.Value(0)).current;
   const lessonCardScale = useRef(new Animated.Value(0.94)).current;
+  const audioScreenActiveRef = useRef(false);
+  const introAudioRequestRef = useRef(0);
   const introAudioRef = useRef<AudioPlayer | null>(null);
   const introAudioDelayRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const practiceAudioRef = useRef<AudioPlayer | null>(null);
@@ -232,7 +248,29 @@ export default function ConsultorioScreen({ navigation }: Props) {
   }, []);
 
   useEffect(() => {
+    if (!showCompletion) {
+      completionProgress.setValue(0);
+      return;
+    }
+
+    const animation = Animated.timing(completionProgress, {
+      toValue: 1,
+      duration: 240,
+      easing: Easing.out(Easing.cubic),
+      useNativeDriver: true,
+    });
+    animation.start();
+    return () => animation.stop();
+  }, [completionProgress, showCompletion]);
+
+  // Navigation can blur a screen without unmounting it. Invalidate pending
+  // playback before releasing the players, including during a quick exit/re-entry.
+  useFocusEffect(useCallback(() => {
+    audioScreenActiveRef.current = true;
+
     return () => {
+      audioScreenActiveRef.current = false;
+      introAudioRequestRef.current += 1;
       if (introAudioDelayRef.current) {
         clearTimeout(introAudioDelayRef.current);
         introAudioDelayRef.current = null;
@@ -246,7 +284,7 @@ export default function ConsultorioScreen({ navigation }: Props) {
       completionAudioRef.current = null;
       void setMusicVolume(THEME_MUSIC_VOLUME);
     };
-  }, [setMusicVolume]);
+  }, [setMusicVolume]));
 
   useFocusEffect(
     useCallback(() => {
@@ -350,7 +388,7 @@ export default function ConsultorioScreen({ navigation }: Props) {
     return index >= 0 ? index : 0;
   }, [instrumentos, lessonInstrument]);
 
-  useEffect(() => {
+  useFocusEffect(useCallback(() => {
     if (lessonStage !== "practice") {
       disposeAudioPlayer(practiceAudioRef.current);
       practiceAudioRef.current = null;
@@ -371,18 +409,14 @@ export default function ConsultorioScreen({ navigation }: Props) {
 
         await setMusicVolume(THEME_MUSIC_DUCKED_VOLUME);
 
+        if (!isActive || !audioScreenActiveRef.current) return;
         const sound = createAudioPlayer(audioSource);
-
-        if (!isActive) {
-          disposeAudioPlayer(sound);
-          return;
-        }
 
         currentSound = sound;
         practiceAudioRef.current = sound;
 
         sound.addListener("playbackStatusUpdate", (status) => {
-          if (status.isLoaded && status.didJustFinish) {
+          if (isActive && status.isLoaded && status.didJustFinish) {
             void setMusicVolume(THEME_MUSIC_VOLUME);
             disposeAudioPlayer(sound);
 
@@ -396,7 +430,10 @@ export default function ConsultorioScreen({ navigation }: Props) {
         if (isActive) {
           void setMusicVolume(THEME_MUSIC_VOLUME);
         }
-        practiceAudioRef.current = null;
+        disposeAudioPlayer(currentSound);
+        if (practiceAudioRef.current === currentSound) {
+          practiceAudioRef.current = null;
+        }
       }
     };
 
@@ -421,9 +458,9 @@ export default function ConsultorioScreen({ navigation }: Props) {
 
       void setMusicVolume(THEME_MUSIC_VOLUME);
     };
-  }, [lessonInstrumentIndex, lessonStage, setMusicVolume]);
+  }, [lessonInstrumentIndex, lessonStage, setMusicVolume]));
 
-  useEffect(() => {
+  useFocusEffect(useCallback(() => {
     if (!showCompletion) {
       disposeAudioPlayer(completionAudioRef.current);
       completionAudioRef.current = null;
@@ -442,18 +479,14 @@ export default function ConsultorioScreen({ navigation }: Props) {
 
         await setMusicVolume(THEME_MUSIC_DUCKED_VOLUME);
 
+        if (!isActive || !audioScreenActiveRef.current) return;
         const sound = createAudioPlayer(completionAudio);
-
-        if (!isActive) {
-          disposeAudioPlayer(sound);
-          return;
-        }
 
         currentSound = sound;
         completionAudioRef.current = sound;
 
         sound.addListener("playbackStatusUpdate", (status) => {
-          if (status.isLoaded && status.didJustFinish) {
+          if (isActive && status.isLoaded && status.didJustFinish) {
             void setMusicVolume(THEME_MUSIC_VOLUME);
             disposeAudioPlayer(sound);
 
@@ -467,7 +500,10 @@ export default function ConsultorioScreen({ navigation }: Props) {
         if (isActive) {
           void setMusicVolume(THEME_MUSIC_VOLUME);
         }
-        completionAudioRef.current = null;
+        disposeAudioPlayer(currentSound);
+        if (completionAudioRef.current === currentSound) {
+          completionAudioRef.current = null;
+        }
       }
     };
 
@@ -486,7 +522,7 @@ export default function ConsultorioScreen({ navigation }: Props) {
 
       void setMusicVolume(THEME_MUSIC_VOLUME);
     };
-  }, [setMusicVolume, showCompletion]);
+  }, [setMusicVolume, showCompletion]));
 
   const instrumentOriginPositions = useMemo(
     () =>
@@ -504,22 +540,22 @@ export default function ConsultorioScreen({ navigation }: Props) {
 
   const dentistTranslateX = dentistProgress.interpolate({
     inputRange: [0, 1],
-    outputRange: [70, 0],
+    outputRange: [motion(70), 0],
   });
 
   const dentistTranslateY = dentistProgress.interpolate({
     inputRange: [0, 1],
-    outputRange: [18, 0],
+    outputRange: [motion(18), 0],
   });
 
   const dentistScale = dentistProgress.interpolate({
     inputRange: [0, 1],
-    outputRange: [0.94, 1],
+    outputRange: tablet ? [0.94, 1] : [0.94 * PHONE_DENTIST_SCALE, PHONE_DENTIST_SCALE],
   });
 
   const floorPanelTranslateY = dentistProgress.interpolate({
     inputRange: [0, 1],
-    outputRange: [36, 0],
+    outputRange: [motion(36), 0],
   });
 
   const selectedOrigin = animatedInstrumentId
@@ -529,14 +565,14 @@ export default function ConsultorioScreen({ navigation }: Props) {
   const selectedInstrumentTranslateX = selectedInstrumentProgress.interpolate({
     inputRange: [0, 1],
     outputRange: selectedOrigin
-      ? [0, instrumentTargetPosition.left - selectedOrigin.left]
+      ? [0, motion(instrumentTargetPosition.left - selectedOrigin.left)]
       : [0, 0],
   });
 
   const selectedInstrumentTranslateY = selectedInstrumentProgress.interpolate({
     inputRange: [0, 1],
     outputRange: selectedOrigin
-      ? [0, instrumentTargetPosition.top - selectedOrigin.top]
+      ? [0, motion(instrumentTargetPosition.top - selectedOrigin.top)]
       : [0, 0],
   });
 
@@ -554,13 +590,7 @@ export default function ConsultorioScreen({ navigation }: Props) {
   const shouldShowInitialInstrumentBubble =
     !showInstructions && !lessonStage && visitedInstrumentIds.length === 0;
 
-  const completionBackground =
-    selectedCharacter === "menina"
-      ? require("../assets/jogo1/background_meninafeliz3.png")
-      : require("../assets/jogo1/background_meninofeliz.png");
-
   const childName = selectedCharacter === "menina" ? "Laura" : "Lucas";
-  const isGirlCharacter = selectedCharacter === "menina";
   const currentPracticeImages = isGirlCharacter ? girlPracticeImages : practiceImages;
   const girlPink = "#EC6A9F";
   const boyBlue = "#243B8F";
@@ -604,17 +634,25 @@ export default function ConsultorioScreen({ navigation }: Props) {
 
   const finishLessonCard = () => {
     if (lessonInstrument) {
+      const completesGame = lastRewardEarned && visitedInstrumentIds.length === instrumentos.length - 1;
       saveViewedInstrument(lessonInstrument.id);
+      if (completesGame) {
+        setShowCompletion(true);
+      }
     }
 
     setSelectedInstrumentId(null);
     setAnimatedInstrumentId(null);
     closeLessonCard();
-
-    // The final star opens the celebration after its entrance animation finishes.
   };
 
   const playCharacterIntroAudio = async () => {
+    if (!audioScreenActiveRef.current) return;
+    const request = ++introAudioRequestRef.current;
+    let sound: AudioPlayer | null = null;
+    const isCurrentRequest = () =>
+      audioScreenActiveRef.current && request === introAudioRequestRef.current;
+
     try {
       if (introAudioRef.current) {
         disposeAudioPlayer(introAudioRef.current);
@@ -623,28 +661,34 @@ export default function ConsultorioScreen({ navigation }: Props) {
 
       await setMusicVolume(THEME_MUSIC_DUCKED_VOLUME);
 
-      const sound = createAudioPlayer(characterIntroAudio[selectedCharacter]);
+      if (!isCurrentRequest()) return;
+      const player = createAudioPlayer(characterIntroAudio[selectedCharacter]);
+      sound = player;
 
-      sound.addListener("playbackStatusUpdate", (status) => {
-        if (status.isLoaded && status.didJustFinish) {
+      player.addListener("playbackStatusUpdate", (status) => {
+        if (isCurrentRequest() && status.isLoaded && status.didJustFinish) {
           void setMusicVolume(THEME_MUSIC_VOLUME);
-          disposeAudioPlayer(sound);
+          disposeAudioPlayer(player);
 
-          if (introAudioRef.current === sound) {
+          if (introAudioRef.current === player) {
             introAudioRef.current = null;
           }
         }
       });
 
-      introAudioRef.current = sound;
-      sound.play();
+      introAudioRef.current = player;
+      player.play();
     } catch {
-      void setMusicVolume(THEME_MUSIC_VOLUME);
-      introAudioRef.current = null;
+      disposeAudioPlayer(sound);
+      if (isCurrentRequest()) {
+        void setMusicVolume(THEME_MUSIC_VOLUME);
+        introAudioRef.current = null;
+      }
     }
   };
 
   const stopCharacterIntroAudio = async () => {
+    introAudioRequestRef.current += 1;
     if (introAudioDelayRef.current) {
       clearTimeout(introAudioDelayRef.current);
       introAudioDelayRef.current = null;
@@ -659,6 +703,9 @@ export default function ConsultorioScreen({ navigation }: Props) {
   };
 
   const scheduleCharacterIntroAudio = () => {
+    // Repeated taps replace the previous introduction, including pending starts.
+    void stopCharacterIntroAudio();
+    if (!audioScreenActiveRef.current) return;
     if (introAudioDelayRef.current) {
       clearTimeout(introAudioDelayRef.current);
     }
@@ -683,6 +730,7 @@ export default function ConsultorioScreen({ navigation }: Props) {
   };
 
   const retryGame = () => {
+    completionProgress.setValue(0);
     setShowCompletion(false);
     setShowInstructions(true);
     setShowCharacterSelection(false);
@@ -696,17 +744,6 @@ export default function ConsultorioScreen({ navigation }: Props) {
     instructionsProgress.setValue(1);
     initialDentistProgress.setValue(0);
   };
-
-  if (showCompletion) {
-    return (
-      <CompletionScreen
-        backgroundSource={completionBackground}
-        isGirl={isGirlCharacter}
-        onRetry={retryGame}
-        onExit={() => navigation.goBack()}
-      />
-    );
-  }
 
   return (
     <View style={styles.background}>
@@ -726,9 +763,14 @@ export default function ConsultorioScreen({ navigation }: Props) {
           !isGirlCharacter && styles.backgroundLayerHidden,
         ]}
       />
+      <Animated.Image
+        source={completionBackground}
+        fadeDuration={0}
+        style={[styles.backgroundLayer, { opacity: completionProgress }]}
+      />
       <View style={styles.overlay} />
 
-      {!showInstructions && !showCharacterSelection ? (
+      {!showInstructions && !showCharacterSelection && !showCompletion ? (
         <Pressable style={styles.exitButton} onPress={() => navigation.goBack()}>
           <Image
             source={require("../assets/shared/botao_sair.png")}
@@ -743,7 +785,7 @@ export default function ConsultorioScreen({ navigation }: Props) {
           hitSlop={0}
           onPress={() => navigation.goBack()}
         >
-          <Ionicons name="chevron-back" size={30} color="#FFFFFF" />
+          <Ionicons name="chevron-back" size={tablet ? 30 * metrics.contentScale : 30} color="#FFFFFF" />
         </Pressable>
       ) : null}
 
@@ -813,6 +855,7 @@ export default function ConsultorioScreen({ navigation }: Props) {
       <Animated.View
         style={[
           styles.floorPanelWrapper,
+          showCompletion && styles.completionTrayLayer,
           {
             opacity: dentistProgress,
             transform: [{ translateY: floorPanelTranslateY }],
@@ -821,18 +864,25 @@ export default function ConsultorioScreen({ navigation }: Props) {
       >
         <InstrumentTray
           completedIds={visitedInstrumentIds}
-          onSelect={(id) => {
+          animateStars={!showCompletion}
+          onSelect={showCompletion ? undefined : (id) => {
             setLessonInstrumentId(id);
             setLessonStage("instrument");
           }}
-          onComplete={() => setShowCompletion(true)}
         />
       </Animated.View>
 
+      {showCompletion ? (
+        <CompletionCelebration
+          progress={completionProgress}
+          isGirl={isGirlCharacter}
+          onRetry={retryGame}
+          onExit={() => navigation.goBack()}
+        />
+      ) : null}
+
       {lessonStage && lessonInstrument ? (
-        <Animated.View
-          style={styles.lessonOverlay}
-        >
+        <SceneOverlay tablet={tablet} animated={true} style={styles.lessonOverlay}>
           <Animated.View
             style={[
               lessonStage === "instrument"
@@ -874,7 +924,7 @@ export default function ConsultorioScreen({ navigation }: Props) {
                   <Text style={styles.lessonInstrumentTitle}>{lessonInstrument.nome}</Text>
                   <View style={styles.instrumentTitleDivider}>
                     <View style={styles.instrumentDividerLine} />
-                    <Ionicons name="medical" size={15} color="#8FD5FF" />
+                    <Ionicons name="medical" size={tablet ? 15 * metrics.contentScale : 15} color="#8FD5FF" />
                     <View style={styles.instrumentDividerLine} />
                   </View>
                   <Text style={styles.lessonDescription}>
@@ -894,7 +944,7 @@ export default function ConsultorioScreen({ navigation }: Props) {
                   >
                     <Ionicons
                       name="sparkles"
-                      size={23}
+                      size={tablet ? 23 * metrics.contentScale : 23}
                       color="#FFFFFF"
                       style={styles.lessonPrimaryButtonLeftIcon}
                     />
@@ -918,7 +968,7 @@ export default function ConsultorioScreen({ navigation }: Props) {
                     </View>
                     <Ionicons
                       name="chevron-forward"
-                      size={24}
+                      size={tablet ? 24 * metrics.contentScale : 24}
                       color="#FFFFFF"
                       style={styles.lessonPrimaryButtonRightIcon}
                     />
@@ -950,7 +1000,7 @@ export default function ConsultorioScreen({ navigation }: Props) {
                   >
                     <Ionicons
                       name="checkmark-circle"
-                      size={30}
+                      size={tablet ? 30 * metrics.contentScale : 30}
                       color="#FFFFFF"
                       style={styles.lessonPrimaryButtonLeftIcon}
                     />
@@ -966,7 +1016,7 @@ export default function ConsultorioScreen({ navigation }: Props) {
                     </View>
                     <Ionicons
                       name="chevron-forward"
-                      size={24}
+                      size={tablet ? 24 * metrics.contentScale : 24}
                       color="#FFFFFF"
                       style={styles.lessonPrimaryButtonRightIcon}
                     />
@@ -1014,7 +1064,7 @@ export default function ConsultorioScreen({ navigation }: Props) {
                     </Text>
                     <Ionicons
                       name="chevron-forward"
-                      size={25}
+                      size={tablet ? 25 * metrics.contentScale : 25}
                       color="#FFFFFF"
                       style={styles.successButtonRightIcon}
                     />
@@ -1023,7 +1073,7 @@ export default function ConsultorioScreen({ navigation }: Props) {
               </>
             )}
           </Animated.View>
-        </Animated.View>
+        </SceneOverlay>
       ) : null}
 
       {showInstructions ? (
@@ -1035,7 +1085,7 @@ export default function ConsultorioScreen({ navigation }: Props) {
       ) : null}
 
       {showCharacterSelection ? (
-        <View style={styles.characterSelectionOverlay}>
+        <SceneOverlay tablet={tablet} animated={false} style={styles.characterSelectionOverlay}>
           <View style={styles.characterSelectionBox}>
             <View style={styles.characterSelectionHeader}>
               <View style={styles.characterSelectionToothSlot}>
@@ -1104,14 +1154,14 @@ export default function ConsultorioScreen({ navigation }: Props) {
                 </Text>
                 <Ionicons
                   name="chevron-forward"
-                  size={21}
+                  size={tablet ? 21 * metrics.contentScale : 21}
                   color="#FFFFFF"
                   style={styles.characterButtonRightIcon}
                 />
               </LinearGradient>
             </Pressable>
           </View>
-        </View>
+        </SceneOverlay>
       ) : null}
     </View>
   );
@@ -1128,6 +1178,10 @@ function ConsultorioCharacterCard({
   active: boolean;
   onPress: () => void;
 }) {
+  const metrics = useSceneMetrics();
+  const tablet = metrics.isTabletLayout;
+  const styles = tablet ? createTabletStyles(metrics) : createPhoneStyles(getPhoneScreenMetrics(metrics));
+
   const isBoy = type === "menino";
   const iconSource = isBoy
     ? require("../assets/jogo2/icone_menino2.png")
@@ -1178,6 +1232,12 @@ function ConsultorioCharacterCard({
 }
 
 function CompletionConfetti() {
+  const metrics = useSceneMetrics();
+  const tablet = metrics.isTabletLayout;
+  const scene = tablet ? metrics : getPhoneScreenMetrics(metrics);
+  const styles = tablet ? createTabletStyles(metrics) : createPhoneStyles(scene);
+  const { width: screenWidth, height: screenHeight } = scene;
+
   const progressValues = useRef(
     completionConfetti.map(() => new Animated.Value(0))
   ).current;
@@ -1246,8 +1306,8 @@ function CompletionConfetti() {
               styles.completionConfettiPiece,
               {
                 left: screenWidth * particle.x,
-                width: particle.width,
-                height: particle.height,
+                width: tablet ? metrics.scale(particle.width) : particle.width,
+                height: tablet ? metrics.scale(particle.height) : particle.height,
                 backgroundColor: particle.color,
                 opacity: progress.interpolate({
                   inputRange: [0, 0.08, 0.9, 1],
@@ -1327,45 +1387,23 @@ function CompletionConfetti() {
   );
 }
 
-function CompletionScreen({
-  backgroundSource,
+function CompletionCelebration({
+  progress,
   isGirl,
   onRetry,
   onExit,
 }: {
-  backgroundSource: ImageSourcePropType;
+  progress: Animated.Value;
   isGirl: boolean;
   onRetry: () => void;
   onExit: () => void;
 }) {
-  const completionDentistProgress = useRef(new Animated.Value(0)).current;
-
-  useEffect(() => {
-    completionDentistProgress.setValue(0);
-    Animated.spring(completionDentistProgress, {
-      toValue: 1,
-      friction: 8,
-      tension: 58,
-      useNativeDriver: true,
-    }).start();
-  }, [completionDentistProgress]);
-
-  const completionDentistTranslateX = completionDentistProgress.interpolate({
-    inputRange: [0, 1],
-    outputRange: [85, 0],
-  });
-
-  const completionDentistTranslateY = completionDentistProgress.interpolate({
-    inputRange: [0, 1],
-    outputRange: [22, 0],
-  });
+  const metrics = useSceneMetrics();
+  const styles = metrics.isTabletLayout ? createTabletStyles(metrics) : createPhoneStyles(getPhoneScreenMetrics(metrics));
+  const girlTextColor = isGirl && { color: "#243B8F" };
 
   return (
-    <ImageBackground
-      source={backgroundSource}
-      style={styles.completionContainer}
-      imageStyle={styles.completionBackground}
-    >
+    <>
       <CompletionConfetti />
 
       <Pressable style={styles.completionExitButton} onPress={onExit}>
@@ -1375,50 +1413,27 @@ function CompletionScreen({
         />
       </Pressable>
 
-      <View style={styles.completionBubble}>
+      <Animated.View style={[styles.completionBubble, { opacity: progress }]}>
         <Image
           source={require("../assets/jogo1/balao.png")}
+          fadeDuration={0}
           style={styles.completionBubbleImage}
         />
         <View style={styles.completionTitleRow}>
           <Text style={styles.completionTitleStar}>★</Text>
-          <Text
-            style={[
-              styles.completionTitle,
-              isGirl && { color: "#243B8F" },
-            ]}
-          >
+          <Text style={[styles.completionTitle, girlTextColor]}>
             Parabéns!
           </Text>
           <Text style={styles.completionTitleStar}>★</Text>
         </View>
         <View style={styles.completionHeadlineBox}>
-          <Text
-            style={[
-              styles.completionHeadlineText,
-              isGirl && { color: "#243B8F" },
-            ]}
-          >
+          <Text style={[styles.completionHeadlineText, girlTextColor]}>
             Você concluiu todos os instrumentos!
           </Text>
         </View>
         <Text style={styles.completionSparkle}>✦</Text>
         <View style={styles.completionBubbleTail} />
-      </View>
-
-      <Animated.Image
-        source={require("../assets/jogo1/dentista-2.png")}
-        style={[
-          styles.completionDentist,
-          {
-            opacity: completionDentistProgress,
-            transform: [
-              { translateX: completionDentistTranslateX },
-              { translateY: completionDentistTranslateY },
-            ],
-          },
-        ]}
-      />
+      </Animated.View>
 
       <Pressable style={styles.completionRetryButton} onPress={onRetry}>
         <Image
@@ -1426,21 +1441,20 @@ function CompletionScreen({
           style={styles.completionRetryButtonImage}
         />
       </Pressable>
-
-      <View style={[styles.floorPanelWrapper, styles.completionTrayLayer]}>
-        <InstrumentTray completedIds={instrumentos.map(({ id }) => id)} animateStars={false} />
-      </View>
-    </ImageBackground>
+    </>
   );
 }
 
 
-function InstrumentTray({ completedIds, onSelect, onComplete, animateStars = true }: {
+function InstrumentTray({ completedIds, onSelect, animateStars }: {
   completedIds: string[];
   onSelect?: (id: string) => void;
-  onComplete?: () => void;
-  animateStars?: boolean;
+  animateStars: boolean;
 }) {
+  const metrics = useSceneMetrics();
+  const tablet = metrics.isTabletLayout;
+  const styles = tablet ? createTabletStyles(metrics) : createPhoneStyles(getPhoneScreenMetrics(metrics));
+
   return (
         <ImageBackground
           source={require("../assets/shared/rectangle.png")}
@@ -1470,7 +1484,6 @@ function InstrumentTray({ completedIds, onSelect, onComplete, animateStars = tru
                 <EarnedInstrumentStar
                   label={`${instrumento.nome} concluído`}
                   animate={animateStars}
-                  onAnimationComplete={completedIds.length === instrumentos.length ? onComplete : undefined}
                 />
               ) : null}
               </View>
@@ -1480,29 +1493,28 @@ function InstrumentTray({ completedIds, onSelect, onComplete, animateStars = tru
   );
 }
 
-function EarnedInstrumentStar({ label, onAnimationComplete, animate = true }: {
+function EarnedInstrumentStar({ label, animate }: {
   label: string;
-  onAnimationComplete?: () => void;
-  animate?: boolean;
+  animate: boolean;
 }) {
+  const metrics = useSceneMetrics();
+  const tablet = metrics.isTabletLayout;
+  const scene = tablet ? metrics : getPhoneScreenMetrics(metrics);
+  const styles = tablet ? createTabletStyles(metrics) : createPhoneStyles(scene);
   const progress = useRef(new Animated.Value(animate ? 0 : 1)).current;
-  const completionRef = useRef(onAnimationComplete);
-  completionRef.current = onAnimationComplete;
 
   useEffect(() => {
-    if (!animate) return;
-    const animation = Animated.sequence([
-      Animated.spring(progress, {
-        toValue: 1,
-        friction: 5,
-        tension: 95,
-        useNativeDriver: true,
-      }),
-      Animated.delay(250),
-    ]);
-    animation.start(({ finished }) => {
-      if (finished) completionRef.current?.();
+    if (!animate) {
+      progress.setValue(1);
+      return;
+    }
+    const animation = Animated.spring(progress, {
+      toValue: 1,
+      friction: 5,
+      tension: 95,
+      useNativeDriver: true,
     });
+    animation.start();
     return () => animation.stop();
   }, [animate, progress]);
 
@@ -1515,7 +1527,7 @@ function EarnedInstrumentStar({ label, onAnimationComplete, animate = true }: {
       style={[styles.earnedInstrumentStar, {
         opacity: progress.interpolate({ inputRange: [0, 0.5, 1], outputRange: [0, 1, 1], extrapolate: "clamp" }),
         transform: [
-          { translateY: progress.interpolate({ inputRange: [0, 1], outputRange: [s(-16), 0] }) },
+          { translateY: progress.interpolate({ inputRange: [0, 1], outputRange: [scene.scale(-16), 0] }) },
           { scale: progress.interpolate({ inputRange: [0, 1], outputRange: [0.35, 1] }) },
           { rotate: progress.interpolate({ inputRange: [0, 1], outputRange: ["-18deg", "0deg"] }) },
         ],
@@ -1529,7 +1541,7 @@ function EarnedInstrumentStar({ label, onAnimationComplete, animate = true }: {
 // Measure an unconstrained copy so fitting uses the device's real font metrics.
 // React Native Web does not implement adjustsFontSizeToFit; this also keeps previews faithful.
 function IntroFittedText({ children, style, numberOfLines = 1 }: { children: React.ReactNode; style: StyleProp<TextStyle>; numberOfLines?: number }) {
-  const flatStyle = StyleSheet.flatten(style);
+  const flatStyle = StyleSheet.flatten(style) ?? {};
   const [availableWidth, setAvailableWidth] = useState(0);
   const [textWidth, setTextWidth] = useState(0);
   const fit = availableWidth && textWidth ? Math.min(1, availableWidth / (textWidth + 1)) : 1;
@@ -1554,26 +1566,33 @@ function ConsultorioIntro({ selectedCharacter, initialDentistProgress, startGame
   initialDentistProgress: Animated.Value;
   startGameplay: () => void;
 }) {
+  const metrics = useSceneMetrics();
+  const tablet = metrics.isTabletLayout;
+  const styles = tablet ? createTabletStyles(metrics) : createPhoneStyles(getPhoneScreenMetrics(metrics));
+  const motion = tablet ? metrics.scale : (value: number) => value;
+
   const window = useWindowDimensions();
-  const [area, setArea] = useState({ width: window.width, height: window.height });
+  const [area, setArea] = useState({ width: tablet ? metrics.width : window.width, height: tablet ? metrics.height : window.height });
   const [cardHeight, setCardHeight] = useState(0);
   const isGirlCharacter = selectedCharacter === "menina";
   const childName = isGirlCharacter ? "Laura" : "Lucas";
   const greetingLead = isGirlCharacter ? "Essa é a" : "Este é o";
   const greetingText = `${greetingLead} ${childName}!`;
-  const introStyles = getIntroStyles(area.width, area.height, cardHeight);
+  const introStyles = tablet
+    ? getTabletIntroStyles(area.width, area.height, cardHeight, styles, metrics.topInset, metrics.bottomInset)
+    : getIntroStyles(area.width, area.height, cardHeight, styles);
   const initialDentistTranslateX = initialDentistProgress.interpolate({
     inputRange: [0, 1],
-    outputRange: [70, 0],
+    outputRange: [motion(70), 0],
   });
 
   const initialDentistTranslateY = initialDentistProgress.interpolate({
     inputRange: [0, 1],
-    outputRange: [18, 0],
+    outputRange: [motion(18), 0],
   });
 
   return (
-        <SafeAreaView style={styles.instructionsLayer} edges={["bottom", "left", "right"]}>
+        <SafeAreaView style={styles.instructionsLayer} edges={tablet ? [] : ["bottom", "left", "right"]}>
           <View style={introStyles.instructionsOverlay} onLayout={({ nativeEvent: { layout } }) => setArea({ width: layout.width, height: layout.height })}>
             <Animated.Image
               testID="intro-dentist"
@@ -1585,6 +1604,7 @@ function ConsultorioIntro({ selectedCharacter, initialDentistProgress, startGame
                   transform: [
                     { translateX: initialDentistTranslateX },
                     { translateY: initialDentistTranslateY },
+                    ...(!tablet ? [{ scale: PHONE_DENTIST_SCALE }] : []),
                   ],
                 },
               ]}
@@ -1634,10 +1654,8 @@ function ConsultorioIntro({ selectedCharacter, initialDentistProgress, startGame
                 </View>
                 <Text style={styles.instructionsCardSparkle}>{"\u2726"}</Text>
               </View>
-              <IntroFittedText style={introStyles.instructionsText} numberOfLines={2}>
-                Hoje é a primeira consulta {selectedCharacter === "menina" ? "dela" : "dele"}.{"\n"}
-                {selectedCharacter === "menina" ? "Ela está" : "Ele está"} um
-                pouquinho {selectedCharacter === "menina" ? "nervosa" : "nervoso"}.
+              <IntroFittedText style={introStyles.instructionsText}>
+                Hoje é a primeira consulta {isGirlCharacter ? "dela" : "dele"}.
               </IntroFittedText>
               <LinearGradient
                 colors={["rgba(95, 174, 245, 0.20)", "rgba(255, 255, 255, 0.06)"]}
@@ -1646,7 +1664,7 @@ function ConsultorioIntro({ selectedCharacter, initialDentistProgress, startGame
                 style={introStyles.instructionsInvite}
               >
                 <View style={introStyles.instructionsInviteIcon}>
-                  <Ionicons name="search-outline" size={24} color="#C9EBFF" />
+                  <Ionicons name="search-outline" size={tablet ? 24 * metrics.contentScale : 24} color="#C9EBFF" />
                 </View>
                 <View style={styles.instructionsInviteCopy}>
                   <IntroFittedText style={introStyles.instructionsPromptLine} numberOfLines={2}>
@@ -1684,7 +1702,7 @@ function ConsultorioIntro({ selectedCharacter, initialDentistProgress, startGame
                   </Text>
                   <Ionicons
                     name="chevron-forward"
-                    size={28}
+                    size={tablet ? 28 * metrics.contentScale : 28}
                     color="#FFFFFF"
                     style={introStyles.instructionsButtonIcon}
                   />
@@ -1697,12 +1715,68 @@ function ConsultorioIntro({ selectedCharacter, initialDentistProgress, startGame
   );
 }
 
-function getIntroStyles(width: number, height: number, measuredCardHeight: number) {
+function getTabletIntroStyles(width: number, height: number, measuredCardHeight: number, styles: ReturnType<typeof createPhoneStyles> | ReturnType<typeof createTabletStyles>, topInset: number, bottomInset: number) {
+  const scene = getTabletConsultorioLayout(width, height, topInset, bottomInset);
+  const gutter = scene.gutter;
+  const zoom = getTabletContentScale(width, height);
+  // Extra vertical room in narrower portrait tablets can support a larger card.
+  // Blend continuously between common 16:10 and 4:3 tablet proportions.
+  const wideBalance = Math.min(1, Math.max(0, (width / height - 5 / 8) / (3 / 4 - 5 / 8)));
+  const portraitBoost = 1 + 0.08 * Math.max(0, 1 - wideBalance * 2);
+  const readabilityBoost = 1.16;
+  const typeScale = Math.min(1.46, Math.max(1.23, width / zoom / 650 * 1.12)) * zoom * portraitBoost * readabilityBoost;
+  const cardWidth = Math.min(width - gutter * 2, 330 * typeScale);
+  const cardBottom = bottomInset + Math.max(0, 16 - 28 * wideBalance) * zoom;
+  // The feet are baked into the background, as is the head used by the balloon.
+  // onLayout measures the intrinsic card (transforms do not change that height),
+  // so compact tablets can fit it below the feet without a measurement loop.
+  const childFeetBottom = imagePointY(width, height, 854, 1842, 0.595);
+  const cardRoom = Math.max(0, height - cardBottom - childFeetBottom - 8 * zoom);
+  const buttonHeight = Math.min(100 * zoom, 64 * typeScale);
+  const cardFit = measuredCardHeight > 0
+    ? Math.min(1, Math.max(44 / buttonHeight, cardRoom / measuredCardHeight)) : 1;
+  const base = getIntroStyles(cardWidth / zoom / 0.84, height / zoom, measuredCardHeight / zoom, styles);
+  // Expand only spacing computed by the phone-shaped reference card; inherited
+  // tablet colors, borders and effects already use the actual viewport metrics.
+  const spacing = <T extends object>(style: T, keys: (keyof T)[]): T => {
+    const result = { ...style };
+    for (const key of keys) if (typeof style[key] === "number") {
+      result[key] = (Number(style[key]) * zoom) as T[keyof T];
+    }
+    return result;
+  };
+  const titleTop = topInset + 16 * zoom;
+  const titleHeight = Math.min(height * 0.22, 250 * zoom);
+  return {
+    ...base,
+    instructionsOverlay: { ...base.instructionsOverlay, justifyContent: "flex-end" as const },
+    instructionsBoxFrame: { ...spacing(base.instructionsBoxFrame, ["minHeight", "padding", "borderRadius"]), position: "absolute" as const, left: (width - cardWidth) / 2, bottom: cardBottom, width: cardWidth,
+      transformOrigin: "50% 100%", transform: [{ scale: cardFit }] },
+    instructionsBox: spacing(base.instructionsBox, ["minHeight", "paddingHorizontal", "paddingTop", "paddingBottom", "borderRadius"]),
+    instructionsHero: spacing(base.instructionsHero, ["minHeight", "gap", "marginTop", "marginBottom"]),
+    instructionsGreetingLogo: spacing(base.instructionsGreetingLogo, ["minHeight"]),
+    instructionsInvite: spacing(base.instructionsInvite, ["gap", "paddingHorizontal", "paddingVertical", "marginTop", "marginBottom", "borderRadius"]),
+    instructionsInviteIcon: spacing(base.instructionsInviteIcon, ["width", "height"]),
+    instructionsVisitImageFrame: { ...base.instructionsVisitImageFrame, top: titleTop, left: gutter, right: gutter, width: width - gutter * 2, height: titleHeight },
+    dentistaInicial: { ...base.dentistaInicial, width: scene.dentistWidth, height: scene.dentistHeight, right: scene.dentistRight, bottom: scene.dentistBottom },
+    instructionsGreetingLayer: { ...base.instructionsGreetingLayer, fontSize: 30 * typeScale, lineHeight: 36 * typeScale },
+    instructionsGreeting: { ...base.instructionsGreeting, fontSize: 30 * typeScale, lineHeight: 36 * typeScale },
+    instructionsText: { ...base.instructionsText, fontSize: 17 * typeScale, lineHeight: 24 * typeScale },
+    instructionsPromptLine: { ...base.instructionsPromptLine, fontSize: 14 * typeScale, lineHeight: 20 * typeScale },
+    instructionsButton: { ...spacing(base.instructionsButton, ["marginTop", "borderRadius"]), height: buttonHeight },
+    instructionsButtonGradient: spacing(base.instructionsButtonGradient, ["borderRadius"]),
+    instructionsButtonText: { ...base.instructionsButtonText, fontSize: 26 * typeScale, lineHeight: 32 * typeScale, paddingHorizontal: 40 * zoom },
+    instructionsButtonIcon: { ...base.instructionsButtonIcon, right: 16 * zoom, width: 30 * zoom },
+  };
+}
+
+function getIntroStyles(width: number, height: number, measuredCardHeight: number, styles: ReturnType<typeof createPhoneStyles> | ReturnType<typeof createTabletStyles>) {
   const cardWidth = Math.min(width * 0.84, 430);
   const unit = cardWidth / (393 * 0.84);
   // Tighten vertical gaps on shorter viewports; text and controls retain their own sizes.
   const spacing = Math.min(1, Math.max(0.65, height / (760 * unit)));
-  const cardHeight = measuredCardHeight || 286 * unit;
+  const cardMinHeight = 262 * unit;
+  const cardHeight = measuredCardHeight || cardMinHeight;
   const cardTop = height - cardHeight;
   const titleHeight = Math.min(242 * unit, height * 0.31);
   const titleTop = Math.min(30 * unit, height * 0.035);
@@ -1712,11 +1786,19 @@ function getIntroStyles(width: number, height: number, measuredCardHeight: numbe
   const greetingFont = { fontSize: 30 * unit, lineHeight: 36 * unit };
   return {
     instructionsOverlay: { ...styles.instructionsOverlay, position: "relative" as const, flex: 1, paddingBottom: 0 },
-    instructionsBoxFrame: { ...styles.instructionsBoxFrame, width: cardWidth, minHeight: 286 * unit * spacing, padding: 4 * unit, borderRadius: 28 * unit },
-    instructionsBox: { ...styles.instructionsBox, minHeight: 278 * unit * spacing, paddingHorizontal: 18 * unit, paddingTop: 23 * unit * spacing, paddingBottom: 14 * unit * spacing, borderRadius: 24 * unit },
+    instructionsBoxFrame: { ...styles.instructionsBoxFrame, width: cardWidth, minHeight: cardMinHeight * spacing, padding: 4 * unit, borderRadius: 28 * unit },
+    instructionsBox: { ...styles.instructionsBox, minHeight: (cardMinHeight - 8 * unit) * spacing, paddingHorizontal: 18 * unit, paddingTop: 23 * unit * spacing, paddingBottom: 14 * unit * spacing, borderRadius: 24 * unit },
     instructionsVisitImageFrame: { ...styles.instructionsVisitImageFrame, top: titleTop, height: titleHeight },
     // Keep the transparent image's lower body behind the card, as in the reference.
-    dentistaInicial: { position: "absolute" as const, width: dentistHeight * 280 / 435, height: dentistHeight, right: width * 0.5 - 60 * unit - dentistHeight * 140 / 435, bottom: cardHeight - dentistOverlap, resizeMode: "contain" as const, zIndex: 1 },
+    dentistaInicial: {
+      position: "absolute" as const,
+      width: dentistHeight * 280 / 435,
+      height: dentistHeight,
+      right: width * 0.5 - 60 * unit - dentistHeight * 140 / 435,
+      bottom: cardHeight - dentistOverlap + 12 * unit,
+      resizeMode: "contain" as const,
+      zIndex: 1,
+    },
     instructionsHero: { ...styles.instructionsHero, minHeight: 52 * unit, gap: 6 * unit, marginTop: -10 * unit * spacing, marginBottom: 2 * unit },
     instructionsGreetingLogo: { ...styles.instructionsGreetingLogo, minWidth: 0, flex: 1, flexShrink: 1, minHeight: 42 * unit },
     instructionsGreetingLayer: { ...styles.instructionsGreetingLayer, ...greetingFont },
@@ -1732,15 +1814,8 @@ function getIntroStyles(width: number, height: number, measuredCardHeight: numbe
   };
 }
 
-const styles = StyleSheet.create({
-  completionContainer: {
-    flex: 1,
-    backgroundColor: "#DCEBFF",
-    overflow: "hidden",
-  },
-  completionBackground: {
-    resizeMode: "cover",
-  },
+function createPhoneStyles({ scale: s, moderateScale: ms }: ReturnType<typeof getPhoneScreenMetrics>) {
+return StyleSheet.create({
   completionConfettiLayer: {
     ...StyleSheet.absoluteFill,
     zIndex: 9,
@@ -1767,8 +1842,8 @@ const styles = StyleSheet.create({
     zIndex: 20,
   },
   completionExitImage: {
-    width: 120,
-    height: 100,
+    width: 132,
+    height: 110,
     resizeMode: "contain",
   },
   completionBubble: {
@@ -1834,15 +1909,6 @@ const styles = StyleSheet.create({
   },
   completionSparkle: {
     display: "none",
-  },
-  completionDentist: {
-    position: "absolute",
-    left: 153,
-    bottom: 198,
-    width: 300,
-    height: 435,
-    resizeMode: "contain",
-    zIndex: 7,
   },
   completionRetryButton: {
     position: "absolute",
@@ -1911,7 +1977,7 @@ const styles = StyleSheet.create({
     resizeMode: "contain",
   },
   characterSelectionTitle: {
-    fontFamily: "Nunito_800ExtraBold",
+    fontFamily: gameFont,
     color: "#1557A7",
     fontSize: 26,
     lineHeight: 30,
@@ -2002,7 +2068,7 @@ const styles = StyleSheet.create({
     resizeMode: "contain",
   },
   characterCardTitle: {
-    fontFamily: "Nunito_800ExtraBold",
+    fontFamily: gameFont,
     marginTop: 8,
     fontSize: 25,
     fontWeight: "900",
@@ -2018,7 +2084,7 @@ const styles = StyleSheet.create({
     transform: [{ scale: 1.02 }],
   },
   characterSelectionReady: {
-    fontFamily: "Nunito_800ExtraBold",
+    fontFamily: gameFont,
     marginTop: 12,
     color: "#1D4E91",
     fontSize: 17,
@@ -2060,7 +2126,7 @@ const styles = StyleSheet.create({
     right: 18,
   },
   characterContinueText: {
-    fontFamily: "Nunito_800ExtraBold",
+    fontFamily: gameFont,
     color: "#FFFFFF",
     fontSize: 19,
     lineHeight: 24,
@@ -2095,8 +2161,8 @@ const styles = StyleSheet.create({
     zIndex: 10,
   },
   exitButtonImage: {
-    width: s(120),
-    height: s(100),
+    width: s(132),
+    height: s(110),
     resizeMode: "contain",
   },
   backIconButton: {
@@ -2167,7 +2233,7 @@ const styles = StyleSheet.create({
   },
   initialInstrumentBubbleText: {
     marginTop: s(-5),
-    fontFamily: "Nunito_800ExtraBold",
+    fontFamily: gameFont,
     color: "#374255",
     fontSize: ms(19),
     lineHeight: ms(26),
@@ -2186,7 +2252,7 @@ const styles = StyleSheet.create({
     textShadowRadius: 2,
   },
   nextInstrumentBubbleTitle: {
-    fontFamily: "Nunito_800ExtraBold",
+    fontFamily: gameFont,
     color: "#374255",
     fontSize: ms(20),
     lineHeight: ms(29),
@@ -2568,7 +2634,7 @@ const styles = StyleSheet.create({
     color: "#173D87",
     fontSize: 18,
     lineHeight: 22,
-    fontFamily: "Nunito_800ExtraBold",
+    fontFamily: gameFont,
     fontWeight: "700",
     textAlign: "center",
     letterSpacing: 0.2,
@@ -2940,3 +3006,1245 @@ const styles = StyleSheet.create({
     textShadowRadius: 3,
   },
 });
+}
+
+
+// Tablet-only styles. The phone styles above are preserved from the pre-tablet snapshot.
+function createTabletStyles(metrics: ReturnType<typeof useSceneMetrics>) {
+const { scale: s, moderateScale: ms } = metrics;
+const layout = getTabletConsultorioLayout(metrics.width, metrics.height, metrics.topInset, metrics.bottomInset);
+const dentistHeight = layout.dentistHeight;
+const dentistWidth = layout.dentistWidth;
+const bubbleScale = 1.08;
+const bubbleWidth = Math.min(metrics.width * 0.60, 440 * metrics.contentScale * bubbleScale);
+// The child's head is part of the background PNG. Respect its position after
+// cover cropping so the speech bubble cannot cover the child's face/hair.
+const childHeadTop = imagePointY(metrics.width, metrics.backgroundHeight, 854, 1842, 0.34);
+const preferredBubbleTop = Math.max(metrics.topInset + s(40), metrics.height * 0.08);
+// Four explicit text lines must fit inside the rounded part, above the tail.
+const bubbleHeight = Math.max(ms(26) * 4 + ms(48),
+  Math.min(s(200), childHeadTop - preferredBubbleTop - 12)) * bubbleScale;
+const minBubbleTop = metrics.topInset + 16;
+const bubbleTop = Math.max(minBubbleTop, Math.min(preferredBubbleTop, childHeadTop - bubbleHeight - 12));
+const availableBubbleHeight = childHeadTop - minBubbleTop - 12;
+const instructionScale = Math.min(1.20, Math.max(bubbleScale, availableBubbleHeight / bubbleHeight * bubbleScale));
+const instructionHeight = bubbleHeight * instructionScale / bubbleScale;
+const instructionWidth = Math.min(metrics.width * 0.66, 440 * metrics.contentScale * instructionScale,
+  metrics.width - layout.gutter - s(150) - 12);
+const instructionTop = Math.max(minBubbleTop, Math.min(preferredBubbleTop, childHeadTop - instructionHeight - 12));
+const nextInstructionHeight = Math.min(instructionHeight, s(158) * instructionScale);
+const trayUnit = layout.trayHeight / (1280 * 0.27);
+const trayInset = 16 * trayUnit;
+const trayVerticalInset = 24 * trayUnit;
+const instrumentSlot = (layout.trayWidth - trayInset * 2) / 5;
+// Scale the phone card composition, rather than stretching it across a tablet.
+const characterTextScale = 1.15;
+const lessonCardWidthBoost = 1.08;
+const lessonCardWidth = Math.min(metrics.width - layout.gutter * 2, s(300) * lessonCardWidthBoost);
+const practiceCardWidth = Math.min(metrics.width - layout.gutter * 2, s(320) * lessonCardWidthBoost);
+const successCardWidth = Math.min(metrics.width - layout.gutter * 2, s(286) * lessonCardWidthBoost);
+// All demonstration assets are 1122 x 1402. Resize both dimensions together.
+const practiceImageWidth = Math.min(practiceCardWidth - s(40), metrics.height * 0.4 * 1122 / 1402);
+return StyleSheet.create({
+  completionConfettiLayer: {
+    ...StyleSheet.absoluteFill,
+    zIndex: 9,
+    elevation: 9,
+  },
+  completionConfettiPiece: {
+    position: "absolute",
+    top: 0,
+    borderRadius: s(3),
+  },
+  completionConfettiStar: {
+    position: "absolute",
+    top: 0,
+    color: "#FFD542",
+    fontWeight: "900",
+    textShadowColor: "rgba(255, 181, 35, 0.45)",
+    textShadowOffset: { width: 0, height: s(1) },
+    textShadowRadius: s(2),
+  },
+  completionExitButton: {
+    position: "absolute",
+    top: Math.max(s(44), metrics.topInset),
+    right: s(18),
+    zIndex: 20,
+  },
+  completionExitImage: {
+    width: s(132),
+    height: s(110),
+    resizeMode: "contain",
+  },
+  completionBubble: {
+    position: "absolute",
+    left: layout.gutter,
+    width: bubbleWidth,
+    top: bubbleTop,
+    height: bubbleHeight,
+    alignItems: "center",
+    justifyContent: "center",
+    zIndex: 8,
+    transform: [{ translateX: 0 }],
+  },
+  completionBubbleImage: {
+    right: 0,
+    position: "absolute",
+    width: "100%",
+    height: "100%",
+    resizeMode: "stretch",
+    transform: [{ scaleX: -1 }],
+  },
+  completionBubbleTail: {
+    display: "none",
+  },
+  completionTitleRow: {
+    marginTop: s(-30),
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: s(6),
+    maxWidth: s(250),
+  },
+  completionTitleStar: {
+    color: "#FFD24A",
+    fontSize: ms(23),
+    lineHeight: ms(27),
+    fontWeight: "900",
+    textShadowColor: "rgba(180, 106, 0, 0.28)",
+    textShadowOffset: { width: 0, height: s(1) },
+    textShadowRadius: s(1),
+  },
+  completionTitle: {
+    color: "#E44D8C",
+
+    fontSize: ms(30),
+    fontWeight: "900",
+    textAlign: "center",
+  },
+  completionHeadlineBox: {
+    marginTop: s(7),
+    alignItems: "center",
+    justifyContent: "center",
+    width: s(238),
+  },
+  completionHeadlineText: {
+    marginTop: 0,
+    color: "#112D91",
+    fontSize: ms(19),
+    lineHeight: ms(26),
+    fontWeight: "800",
+    textAlign: "center",
+    letterSpacing: 0,
+  },
+  completionSparkle: {
+    display: "none",
+  },
+  completionRetryButton: {
+    position: "absolute",
+    left: s(72),
+    right: s(72),
+    bottom: layout.trayBottom + layout.trayHeight + layout.gutter,
+    height: s(74),
+    alignItems: "center",
+    justifyContent: "center",
+    zIndex: 12,
+    elevation: 12,
+  },
+  completionRetryButtonImage: {
+    top: 0,
+    width: s(180),
+    height: s(74),
+    resizeMode: "contain",
+  },
+  completionTrayLayer: {
+    zIndex: 10,
+  },
+  characterSelectionOverlay: {
+    ...StyleSheet.absoluteFill,
+    zIndex: 70,
+    backgroundColor: "rgba(17, 74, 121, 0.28)",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: s(28),
+  },
+  characterSelectionBox: {
+    width: "93%",
+    maxWidth: s(385),
+    minHeight: s(470),
+    padding: s(10),
+    borderRadius: s(28),
+    backgroundColor: "rgba(250, 254, 255, 0.98)",
+    borderWidth: s(2),
+    borderColor: "rgba(126, 207, 250, 0.72)",
+    paddingHorizontal: s(16),
+    paddingVertical: s(22),
+    alignItems: "center",
+    justifyContent: "flex-start",
+    shadowColor: "#075B9C",
+    shadowOffset: { width: 0, height: s(5) },
+    shadowOpacity: 0.12,
+    shadowRadius: s(12),
+    elevation: 5,
+  },
+  characterSelectionHeader: {
+    width: "100%",
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: s(10),
+  },
+  characterSelectionToothSlot: {
+    width: s(44),
+    height: s(44),
+    alignItems: "center",
+    justifyContent: "center",
+    overflow: "visible",
+  },
+  characterSelectionTooth: {
+    width: s(134),
+    height: s(104),
+    resizeMode: "contain",
+  },
+  characterSelectionTitle: {
+    flexShrink: 1,
+    fontFamily: FRIENDLY_FONT,
+    color: "#1557A7",
+    fontSize: ms(26) * characterTextScale,
+    lineHeight: ms(30) * characterTextScale,
+    fontWeight: "900",
+    textAlign: "left",
+    letterSpacing: 0.2,
+    textShadowColor: "rgba(149, 220, 255, 0.25)",
+    textShadowOffset: { width: 0, height: s(1) },
+    textShadowRadius: s(1),
+  },
+  characterCardsPanel: {
+    width: "100%",
+    marginTop: s(20),
+    borderRadius: s(20),
+    backgroundColor: "rgba(238, 249, 255, 0.72)",
+    borderWidth: s(1),
+    borderColor: "rgba(192, 234, 255, 0.86)",
+    paddingHorizontal: s(10),
+    paddingTop: s(12),
+    paddingBottom: s(12),
+  },
+  characterCardsRow: {
+    width: "100%",
+    flexDirection: "row",
+    justifyContent: "center",
+    gap: s(10),
+  },
+  characterCard: {
+    position: "relative",
+    width: "46%",
+    height: s(206),
+    borderRadius: s(22),
+    borderWidth: s(2),
+    paddingHorizontal: s(8),
+    paddingTop: s(10),
+    paddingBottom: s(10),
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "transparent",
+    shadowColor: "#176EAE",
+    shadowOffset: { width: 0, height: s(2) },
+    shadowOpacity: 0.06,
+    shadowRadius: s(4),
+    elevation: 2,
+  },
+  characterCardBoy: {
+    borderColor: "#64B5F6",
+  },
+  characterCardGirl: {
+    borderColor: "#F48FBE",
+  },
+  characterCardBoyActive: {
+    borderColor: "#1489E8",
+    borderWidth: s(3),
+    backgroundColor: "rgba(224, 244, 255, 0.52)",
+    shadowColor: "#3498DB",
+    shadowOffset: { width: 0, height: s(3) },
+    shadowOpacity: 0.1,
+    shadowRadius: s(6),
+    elevation: 3,
+    transform: [{ scale: 1.01 }],
+  },
+  characterCardGirlActive: {
+    borderColor: "#E94491",
+    borderWidth: s(3),
+    backgroundColor: "rgba(255, 237, 247, 0.58)",
+    shadowColor: "#F48FBE",
+    shadowOffset: { width: 0, height: s(3) },
+    shadowOpacity: 0.1,
+    shadowRadius: s(6),
+    elevation: 3,
+    transform: [{ scale: 1.01 }],
+  },
+  characterCardGradient: {
+    ...StyleSheet.absoluteFill,
+    borderRadius: s(19),
+  },
+  characterCardIconSlot: {
+    width: s(112),
+    height: s(112),
+    alignItems: "center",
+    justifyContent: "center",
+    overflow: "visible",
+  },
+  characterCardIcon: {
+    width: s(255),
+    height: s(255),
+    resizeMode: "contain",
+  },
+  characterCardTitle: {
+    fontFamily: FRIENDLY_FONT,
+    marginTop: s(8),
+    fontSize: ms(25) * characterTextScale,
+    fontWeight: "900",
+    textAlign: "center",
+  },
+  characterCardTitleBoy: {
+    color: "#1F8CE3",
+  },
+  characterCardTitleGirl: {
+    color: "#EB6AA3",
+  },
+  characterCardTitleActive: {
+    transform: [{ scale: 1.02 }],
+  },
+  characterSelectionReady: {
+    fontFamily: FRIENDLY_FONT,
+    marginTop: s(12),
+    color: "#1D4E91",
+    fontSize: ms(21),
+    fontWeight: "900",
+    textAlign: "center",
+    letterSpacing: 0.15,
+    textShadowColor: "rgba(186, 234, 255, 0.25)",
+    textShadowOffset: { width: 0, height: s(1) },
+    textShadowRadius: s(1),
+  },
+  characterContinueButton: {
+    marginTop: s(15),
+    width: s(240),
+    height: Math.max(44, s(52)),
+    borderRadius: s(23),
+    alignItems: "center",
+    justifyContent: "center",
+    shadowColor: "#02649F",
+    shadowOffset: { width: 0, height: s(7) },
+    shadowOpacity: 0.32,
+    shadowRadius: s(11),
+    elevation: 9,
+    overflow: "hidden",
+  },
+  characterContinueGradient: {
+    width: "100%",
+    height: "100%",
+    borderRadius: s(23),
+    borderWidth: s(2.5),
+    borderColor: "rgba(196, 237, 255, 0.95)",
+    position: "relative",
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: s(18),
+  },
+  characterButtonRightIcon: {
+    position: "absolute",
+    right: s(18),
+  },
+  characterContinueText: {
+    fontFamily: FRIENDLY_FONT,
+    color: "#FFFFFF",
+    fontSize: ms(19) * characterTextScale,
+    lineHeight: ms(24) * characterTextScale,
+    fontWeight: "900",
+    textShadowColor: "rgba(4, 68, 123, 0.45)",
+    textShadowOffset: { width: 0, height: s(2) },
+    textShadowRadius: s(2),
+    width: "100%",
+    textAlign: "center",
+    includeFontPadding: false,
+  },
+  background: {
+    flex: 1,
+    backgroundColor: "#EEF5FF",
+  },
+  backgroundLayer: {
+    ...StyleSheet.absoluteFill,
+    width: "100%",
+    height: metrics.backgroundHeight,
+    resizeMode: "cover",
+  },
+  backgroundLayerHidden: {
+    opacity: 0,
+  },
+  overlay: {
+    flex: 1,
+  },
+  exitButton: {
+    position: "absolute",
+    top: Math.max(s(44), metrics.topInset),
+    right: s(18),
+    zIndex: 10,
+  },
+  exitButtonImage: {
+    width: s(132),
+    height: s(110),
+    resizeMode: "contain",
+  },
+  backIconButton: {
+    position: "absolute",
+    top: Math.max(s(48), metrics.topInset),
+    left: s(18),
+    width: Math.max(44, s(42)),
+    height: Math.max(44, s(42)),
+    borderRadius: s(21),
+    backgroundColor: "rgba(5, 47, 121, 0.52)",
+    borderWidth: s(1),
+    borderColor: "rgba(205, 237, 255, 0.5)",
+    alignItems: "center",
+    justifyContent: "center",
+    zIndex: 120,
+    elevation: 120,
+    shadowColor: "#03194C",
+    shadowOffset: { width: 0, height: s(3) },
+    shadowOpacity: 0.22,
+    shadowRadius: s(5),
+  },
+  dentistaWrapper: {
+    position: "absolute",
+    right: layout.dentistRight,
+    bottom: layout.dentistBottom,
+    width: dentistWidth,
+    height: dentistHeight,
+    zIndex: 4,
+  },
+  dentistaExplicando: {
+    top: 0,
+    left: 0,
+    width: dentistWidth,
+    height: dentistHeight,
+    resizeMode: "contain",
+  },
+  instrumentBubble: {
+    position: "absolute",
+    left: layout.gutter,
+    top: instructionTop,
+    width: instructionWidth,
+    height: instructionHeight,
+    zIndex: 7,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  nextInstrumentBubble: {
+    height: nextInstructionHeight,
+  },
+  instrumentBubbleImage: {
+    position: "absolute",
+    width: instructionWidth,
+    height: instructionHeight,
+    resizeMode: "stretch",
+    transform: [{ scaleX: -1 }],
+  },
+  nextInstrumentBubbleImage: {
+    height: nextInstructionHeight,
+  },
+  instrumentBubbleTextBox: {
+    width: instructionWidth * 0.80,
+    minHeight: Math.min(s(132) * instructionScale, instructionHeight * 0.78),
+    marginTop: s(-12) * instructionScale,
+    marginLeft: s(-6),
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  nextInstrumentBubbleTextBox: {
+    marginTop: s(-22),
+  },
+  initialInstrumentBubbleText: {
+    marginTop: s(-5),
+    fontFamily: FRIENDLY_FONT,
+    color: "#374255",
+    fontSize: ms(19) * instructionScale,
+    lineHeight: ms(26) * instructionScale,
+    fontWeight: "900",
+    textAlign: "center",
+    includeFontPadding: false,
+    textShadowColor: "rgba(255, 255, 255, 0.95)",
+    textShadowOffset: { width: 0, height: s(1) },
+    textShadowRadius: s(2),
+  },
+  instrumentBubbleTextHighlight: {
+    color: "#0057C8",
+    fontWeight: "900",
+    textShadowColor: "rgba(70, 150, 255, 0.2)",
+    textShadowOffset: { width: 0, height: s(1) },
+    textShadowRadius: s(2),
+  },
+  nextInstrumentBubbleTitle: {
+    fontFamily: FRIENDLY_FONT,
+    color: "#374255",
+    fontSize: ms(20) * instructionScale,
+    lineHeight: ms(29) * instructionScale,
+    fontWeight: "900",
+    textAlign: "center",
+    includeFontPadding: false,
+    textShadowColor: "rgba(255, 255, 255, 0.95)",
+    textShadowOffset: { width: 0, height: s(1) },
+    textShadowRadius: s(2),
+  },
+  floorPanelWrapper: {
+    position: "absolute",
+    left: layout.trayLeft,
+    width: layout.trayWidth,
+    bottom: layout.trayBottom,
+    height: layout.trayHeight,
+    zIndex: 6,
+    overflow: "visible",
+  },
+  floorPanel: {
+    width: layout.trayWidth,
+    height: layout.trayHeight,
+    paddingHorizontal: trayInset,
+    paddingVertical: trayVerticalInset,
+    flexDirection: "row",
+    alignItems: "flex-end",
+    justifyContent: "space-between",
+    overflow: "hidden",
+  },
+  floorPanelImage: {
+    resizeMode: "contain",
+    width: layout.trayImageWidth,
+    height: layout.trayImageHeight,
+    left: layout.trayImageLeft,
+    top: layout.trayImageTop,
+  },
+  instrumentButton: {
+    width: instrumentSlot,
+    height: layout.trayHeight - trayVerticalInset * 2,
+    alignItems: "center",
+    justifyContent: "flex-end",
+  },
+  gameFloorPanel: {
+    paddingLeft: trayInset,
+    paddingRight: trayInset,
+  },
+  // The asset includes large outer margins. Align its visible blue border with the reference.
+  gameFloorPanelImage: {
+    width: layout.trayImageWidth,
+    height: layout.trayImageHeight,
+    left: layout.trayImageLeft,
+    top: layout.trayImageTop,
+  },
+  // Match the instrument row without letting stars participate in its layout.
+  instrumentStarsLayer: {
+    position: "absolute",
+    left: trayInset,
+    right: trayInset,
+    bottom: 8 * trayUnit,
+    flexDirection: "row",
+    justifyContent: "space-between",
+  },
+  instrumentStarSlot: {
+    width: instrumentSlot,
+    alignItems: "center",
+  },
+  earnedStarImage: {
+    width: "100%",
+    height: "100%",
+    resizeMode: "contain",
+  },
+  earnedInstrumentStar: {
+    position: "absolute",
+    bottom: 0,
+    width: 68 * trayUnit,
+    height: 71.4 * trayUnit,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  instrumentoItem: {
+    width: instrumentSlot * 0.85,
+    height: layout.trayHeight - trayVerticalInset * 2,
+    resizeMode: "contain",
+  },
+  lessonOverlay: {
+    ...StyleSheet.absoluteFill,
+    zIndex: 80,
+    elevation: 0,
+    backgroundColor: "rgba(10, 25, 55, 0.72)",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: s(22),
+  },
+  instrumentLessonCard: {
+    width: lessonCardWidth,
+    minHeight: s(520),
+    borderRadius: s(30),
+    borderWidth: s(2.5),
+    borderColor: "#D8ECFF",
+    backgroundColor: "#F9FCFF",
+    alignItems: "center",
+    paddingHorizontal: s(18),
+    paddingTop: s(34),
+    paddingBottom: s(22),
+    shadowOpacity: 0,
+    shadowRadius: 0,
+    elevation: 0,
+    overflow: "hidden",
+  },
+  practiceLessonCard: {
+    width: practiceCardWidth,
+    minHeight: s(610),
+    borderRadius: s(24),
+    borderWidth: s(2),
+    borderColor: "#6EA8F7",
+    backgroundColor: "#FFFFFF",
+    alignItems: "center",
+    paddingHorizontal: s(18),
+    paddingTop: s(34),
+    paddingBottom: s(24),
+    shadowColor: "#0F3C88",
+    shadowOpacity: 0.3,
+    shadowRadius: s(18),
+    elevation: 10,
+  },
+  successLessonCard: {
+    width: successCardWidth,
+    minHeight: s(480),
+    borderRadius: s(22),
+    borderWidth: s(2),
+    borderColor: "#61C9A8",
+    backgroundColor: "#FFFFFF",
+    alignItems: "center",
+    paddingHorizontal: s(22),
+    paddingTop: s(54),
+    paddingBottom: s(22),
+    shadowColor: "#0F3C88",
+    shadowOpacity: 0.28,
+    shadowRadius: s(18),
+    elevation: 10,
+  },
+  lessonCloseButton: {
+    position: "absolute",
+    top: s(10),
+    right: s(10),
+    width: Math.max(44, s(42)),
+    height: Math.max(44, s(42)),
+    borderRadius: s(21),
+    backgroundColor: "#3939ff",
+    borderWidth: s(2),
+    borderColor: "#DCEBFF",
+    alignItems: "center",
+    justifyContent: "center",
+    zIndex: 8,
+    shadowColor: "#143E82",
+    shadowOffset: { width: 0, height: s(4) },
+    shadowOpacity: 0.25,
+    shadowRadius: s(6),
+    elevation: 5,
+  },
+  lessonCloseText: {
+    color: "#FFFFFF",
+    fontSize: ms(30),
+    lineHeight: ms(32),
+    fontWeight: "900",
+  },
+  lessonInstrumentHalo: {
+    position: "absolute",
+    top: s(24),
+    width: s(292),
+    height: s(292),
+    borderRadius: s(146),
+    backgroundColor: "transparent",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  lessonInstrumentHaloRing: {
+    position: "absolute",
+    width: s(226),
+    height: s(226),
+    borderRadius: s(113),
+    borderWidth: s(4),
+    borderColor: "#FFFFFF",
+    backgroundColor: "#EDF5FF",
+  },
+  lessonInstrumentHaloDottedRing: {
+    position: "absolute",
+    width: s(244),
+    height: s(244),
+    borderRadius: s(122),
+    borderWidth: s(2),
+    borderStyle: "dotted",
+    borderColor: "rgba(103, 148, 221, 0.18)",
+  },
+  lessonSparkleGroupRight: {
+    position: "absolute",
+    top: s(78),
+    right: s(16),
+    zIndex: 3,
+  },
+  lessonSparkleGroupLeft: {
+    position: "absolute",
+    left: s(16),
+    bottom: s(58),
+    zIndex: 3,
+  },
+  lessonSparkleLarge: {
+    color: "#4F7FE8",
+    fontSize: ms(25),
+    lineHeight: ms(26),
+    fontWeight: "900",
+  },
+  lessonSparkleSmall: {
+    marginLeft: s(20),
+    marginTop: s(-3),
+    color: "#4F7FE8",
+    fontSize: ms(18),
+    lineHeight: ms(20),
+    fontWeight: "900",
+  },
+  lessonInstrumentImage: {
+    width: s(170),
+    height: s(240),
+    resizeMode: "contain",
+    zIndex: 2,
+  },
+  instrumentTextBox: {
+    width: "100%",
+    marginTop: s(8),
+    borderRadius: s(24),
+    backgroundColor: "#FFFFFF",
+    borderWidth: s(1.5),
+    borderColor: "#EEF6FF",
+    paddingHorizontal: s(16),
+    paddingTop: s(16),
+    paddingBottom: s(18),
+    shadowOpacity: 0,
+    shadowRadius: 0,
+    elevation: 0,
+  },
+  instrumentTitleDivider: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: s(8),
+    marginBottom: s(9),
+  },
+  instrumentDividerLine: {
+    width: s(70),
+    height: s(1.4),
+    borderRadius: s(1),
+    backgroundColor: "#C9E2FF",
+  },
+  lessonDescription: {
+    color: "#263F82",
+    fontSize: ms(16.5),
+    lineHeight: ms(22),
+    fontWeight: "600",
+    textAlign: "center",
+  },
+  lessonPrimaryButton: {
+    width: "98%",
+    height: s(64),
+    marginTop: s(16),
+    borderRadius: s(23),
+    alignItems: "center",
+    justifyContent: "center",
+    shadowOpacity: 0,
+    shadowRadius: 0,
+    elevation: 0,
+    overflow: "hidden",
+  },
+  lessonPracticeButton: {
+    width: "104%",
+  },
+  lessonPrimaryButtonGradient: {
+    width: "100%",
+    height: s(64),
+    borderRadius: s(23),
+    borderWidth: s(2),
+    borderColor: "#A9C0FF",
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: s(34),
+  },
+  lessonPrimaryButtonCopy: {
+    width: "100%",
+    alignItems: "center",
+    minWidth: 0,
+  },
+  lessonPrimaryButtonLeftIcon: {
+    position: "absolute",
+    left: s(14),
+  },
+  lessonPrimaryButtonRightIcon: {
+    position: "absolute",
+    right: s(14),
+  },
+  lessonPrimaryButtonText: {
+    color: "#ffffff",
+    fontSize: ms(18),
+    lineHeight: ms(23),
+    fontWeight: "900",
+    width: "100%",
+    textAlign: "center",
+    includeFontPadding: false,
+    textShadowColor: "rgba(18, 18, 110, 0.45)",
+    textShadowOffset: { width: 0, height: s(2) },
+    textShadowRadius: s(3),
+  },
+  lessonPrimaryButtonEntendiText: {
+    color: "#ffffff",
+    fontSize: ms(23),
+    lineHeight: ms(28),
+    fontWeight: "900",
+    width: "100%",
+    textAlign: "center",
+    includeFontPadding: false,
+    textShadowColor: "rgba(18, 18, 110, 0.45)",
+    textShadowOffset: { width: 0, height: s(2) },
+    textShadowRadius: s(3),
+  },
+  lessonPrimaryButtonSubtext: {
+    marginTop: s(1),
+    color: "#E8ECFF",
+    fontSize: ms(13),
+    lineHeight: ms(16),
+    fontWeight: "600",
+    width: "100%",
+    textAlign: "center",
+    includeFontPadding: false,
+  },
+  lessonInstrumentTitle: {
+    color: "#0A4CB3",
+    fontSize: ms(32),
+    lineHeight: ms(37),
+    fontWeight: "900",
+    textAlign: "center",
+    marginBottom: s(3),
+    textShadowColor: "rgba(58, 125, 226, 0.12)",
+    textShadowOffset: { width: 0, height: s(2) },
+    textShadowRadius: s(3),
+  },
+  practiceTitle: {
+    color: "#0A4CB3",
+    fontSize: ms(32),
+    lineHeight: ms(37),
+    fontWeight: "900",
+    textAlign: "center",
+    marginBottom: s(18),
+    textShadowColor: "rgba(58, 125, 226, 0.12)",
+    textShadowOffset: { width: 0, height: s(2) },
+    textShadowRadius: s(3),
+  },
+  practiceImage: {
+    width: practiceImageWidth,
+    height: practiceImageWidth * 1402 / 1122,
+    borderRadius: s(14),
+    resizeMode: "contain",
+    borderWidth: s(2),
+    borderColor: "#D7E8FF",
+  },
+  practiceDescriptionCard: {
+    width: "100%",
+    marginTop: s(20),
+    minHeight: s(104),
+    borderRadius: s(16),
+    borderWidth: s(1.5),
+    borderColor: "#C7E4FF",
+    backgroundColor: "#F5FBFF",
+    alignItems: "stretch",
+    justifyContent: "center",
+    paddingVertical: s(13),
+    paddingHorizontal: s(14),
+    shadowColor: "#1D61B8",
+    shadowOpacity: 0.09,
+    shadowRadius: s(7),
+    shadowOffset: { width: 0, height: s(3) },
+    elevation: 2,
+  },
+  practiceDescription: {
+    width: "100%",
+    color: "#173D87",
+    fontSize: ms(18),
+    lineHeight: ms(22),
+    fontFamily: FRIENDLY_FONT,
+    fontWeight: "700",
+    textAlign: "center",
+    letterSpacing: 0.2,
+    includeFontPadding: false,
+    textShadowColor: "rgba(255, 255, 255, 0.95)",
+    textShadowOffset: { width: 0, height: s(1) },
+    textShadowRadius: s(1),
+  },
+  successCheckCircle: {
+    position: "absolute",
+    top: s(-40),
+    width: s(82),
+    height: s(82),
+    borderRadius: s(41),
+    backgroundColor: "#6BC449",
+    borderWidth: s(3),
+    borderColor: "#4E9F37",
+    alignItems: "center",
+    justifyContent: "center",
+    shadowColor: "#2F7D22",
+    shadowOpacity: 0.32,
+    shadowRadius: s(8),
+    elevation: 8,
+  },
+  successCheckText: {
+    color: "#FFFFFF",
+    fontSize: ms(46),
+    lineHeight: ms(50),
+    fontWeight: "900",
+  },
+  successTitle: {
+    color: "#54A844",
+    fontSize: ms(25),
+    fontWeight: "900",
+    textAlign: "center",
+  },
+  successDescription: {
+    marginTop: s(10),
+    color: "#1E3A8A",
+    fontSize: ms(19),
+    lineHeight: ms(25),
+    fontWeight: "600",
+    textAlign: "center",
+  },
+  successInstrumentImage: {
+    width: "100%",
+    maxWidth: s(220),
+    marginTop: s(16),
+    height: s(190),
+    resizeMode: "contain",
+  },
+  successInstrumentName: {
+    marginTop: s(12),
+    color: "#1E3A8A",
+    fontSize: ms(17),
+    fontWeight: "900",
+    textAlign: "center",
+  },
+  successRewardRow: {
+    width: "92%",
+    marginTop: s(12),
+    paddingTop: 0,
+    borderTopWidth: s(1),
+    borderTopColor: "#DDEBFF",
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 0,
+  },
+  successRewardStar: {
+    width: s(55),
+    height: s(55),
+    resizeMode: "contain",
+  },
+  successRewardText: {
+    color: "#1E3A8A",
+    fontSize: ms(18),
+    fontWeight: "600",
+  },
+  successButton: {
+    width: "94%",
+    height: s(62),
+    marginTop: s(18),
+    borderRadius: s(23),
+    alignItems: "center",
+    justifyContent: "center",
+    shadowColor: "#1F7F18",
+    shadowOffset: { width: 0, height: s(7) },
+    shadowOpacity: 0.28,
+    shadowRadius: s(10),
+    elevation: 8,
+    overflow: "hidden",
+  },
+  successButtonGradient: {
+    width: "100%",
+    height: "100%",
+    borderRadius: s(23),
+    borderWidth: s(2),
+    borderColor: "rgba(219, 255, 172, 0.95)",
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: s(34),
+    position: "relative",
+  },
+  successButtonText: {
+    color: "#FFFFFF",
+    fontSize: ms(22),
+    lineHeight: ms(27),
+    fontWeight: "900",
+    width: "100%",
+    textAlign: "center",
+    includeFontPadding: false,
+    transform: [{ translateX: s(-9) }],
+    textShadowColor: "rgba(28, 94, 16, 0.45)",
+    textShadowOffset: { width: 0, height: s(2) },
+    textShadowRadius: s(3),
+  },
+  successButtonRightIcon: {
+    position: "absolute",
+    right: s(17),
+  },
+  instructionsLayer: {
+    ...StyleSheet.absoluteFill,
+    zIndex: 100,
+    elevation: 100,
+  },
+  instructionsOverlay: {
+    ...StyleSheet.absoluteFill,
+    zIndex: 100,
+    elevation: 100,
+    backgroundColor: "transparent",
+    alignItems: "center",
+    justifyContent: "flex-end",
+    paddingHorizontal: 0,
+    paddingBottom: s(44),
+  },
+  instructionsBoxFrame: {
+    width: "84%",
+    minHeight: s(286),
+    borderRadius: s(28),
+    backgroundColor: "rgba(172, 223, 255, 0.94)",
+    padding: s(4),
+    shadowColor: "#03163F",
+    shadowOffset: { width: 0, height: s(7) },
+    shadowOpacity: 0.24,
+    shadowRadius: s(12),
+    elevation: 8,
+    zIndex: 2,
+    overflow: "hidden",
+  },
+  instructionsBoxFrameGirl: {
+    backgroundColor: "rgba(255, 190, 223, 0.9)",
+  },
+  instructionsBox: {
+    width: "100%",
+    minHeight: s(278),
+    borderRadius: s(24),
+    backgroundColor: "#073F9F",
+    paddingHorizontal: s(18),
+    paddingTop: s(23),
+    paddingBottom: s(14),
+    alignItems: "center",
+    justifyContent: "flex-start",
+    overflow: "hidden",
+  },
+  instructionsVisitImageFrame: {
+    position: "absolute",
+    top: s(30),
+    left: "6%",
+    right: "6%",
+    height: s(242),
+    alignItems: "center",
+    justifyContent: "center",
+    zIndex: 3,
+    elevation: 3,
+  },
+  instructionsVisitImage: {
+    width: "100%",
+    height: "100%",
+    resizeMode: "contain",
+    transform: [{ scale: 1.10 }],
+  },
+  instructionsCardSparkle: {
+    color: "#FFFFFF",
+    width: s(18),
+    fontSize: ms(18),
+    fontWeight: "900",
+    textAlign: "center",
+    textShadowColor: "rgba(142, 223, 255, 0.85)",
+    textShadowRadius: s(3),
+    zIndex: 1,
+  },
+  instructionsHero: {
+    position: "relative",
+    width: "100%",
+    minHeight: s(52),
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: s(6),
+    marginTop:s(-10),
+    marginBottom: s(2),
+  },
+  instructionsGreetingLogo: {
+    minWidth: s(236),
+    minHeight: s(42),
+    alignItems: "center",
+    justifyContent: "center",
+    position: "relative",
+  },
+  instructionsGreetingLayer: {
+    position: "absolute",
+    left: 0,
+    right: 0,
+    fontFamily: friendlyBoldFont,
+    fontSize: ms(30),
+    lineHeight: ms(36),
+    fontWeight: "900",
+    textAlign: "center",
+    includeFontPadding: false,
+  },
+  instructionsGreetingStroke: {
+    color: "#062F7B",
+    transform: [
+      { translateX: 0 },
+      { translateY: s(1) },
+      { scale: 1.025 },
+    ],
+    textShadowColor: "#06245D",
+    textShadowOffset: { width: 0, height: s(1) },
+    textShadowRadius: s(1),
+  },
+  instructionsGreetingDepth: {
+    color: "rgba(2, 23, 78, 0.24)",
+    transform: [{ translateY: s(2) }],
+    textShadowColor: "rgba(0, 14, 62, 0.2)",
+    textShadowOffset: { width: 0, height: s(1) },
+    textShadowRadius: s(1.5),
+  },
+  instructionsGreeting: {
+    fontFamily: friendlyBoldFont,
+    color: "#FDFEFF",
+    fontSize: ms(30),
+    lineHeight: ms(36),
+    fontWeight: "900",
+    textAlign: "center",
+    includeFontPadding: false,
+    textShadowColor: "rgba(255, 255, 255, 0.46)",
+    textShadowOffset: { width: 0, height: s(-1) },
+    textShadowRadius: s(1),
+  },
+  instructionsName: {
+    color: "#80CAFF",
+  },
+  instructionsNameGirl: {
+    color: "#FFA3CE",
+  },
+  instructionsText: {
+    fontFamily: friendlyTextFont,
+    color: "#FFFFFF",
+    width: "100%",
+    fontSize: ms(17),
+    lineHeight: ms(24),
+    fontWeight: "700",
+    textAlign: "center",
+    textShadowColor: "#07316D",
+    textShadowOffset: { width: 0, height: s(2) },
+    textShadowRadius: s(2.5),
+  },
+  instructionsInvite: {
+    width: "100%",
+    flexDirection: "row",
+    alignItems: "center",
+    gap: s(8),
+    marginTop: s(12),
+    paddingHorizontal: s(10),
+    paddingVertical: s(11),
+    marginBottom: s(10),
+    borderRadius: s(20),
+    borderWidth: s(1.5),
+    borderColor: "rgba(198, 235, 255, 0.5)",
+    backgroundColor: "rgba(15, 86, 190, 0.88)",
+    shadowColor: "#001C58",
+    shadowOffset: { width: 0, height: s(3) },
+    shadowOpacity: 0.22,
+    shadowRadius: s(5),
+    elevation: 4,
+    overflow: "hidden",
+  },
+  instructionsInviteIcon: {
+    width: s(35),
+    height: s(35),
+    borderRadius: s(20),
+    borderWidth: s(1),
+    borderColor: "#B6EEFF",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  instructionsInviteCopy: {
+    minWidth: 0,
+    flex: 1,
+    flexShrink: 1,
+    justifyContent: "center",
+  },
+  instructionsPromptLine: {
+    fontFamily: friendlyBoldFont,
+    color: "#FFFFFF",
+    width: "100%",
+    flexShrink: 1,
+    fontSize: ms(13.8),
+    lineHeight: ms(19),
+    fontWeight: "800",
+    textAlign: "left",
+    includeFontPadding: false,
+    textShadowColor: "#07316D",
+    textShadowOffset: { width: 0, height: s(1) },
+    textShadowRadius: s(1.8),
+  },
+  instructionsPromptName: {
+    color: "#D8F0FF",
+  },
+  instructionsPromptNameGirl: {
+    color: "#FFE1F0",
+  },
+  instructionsButton: {
+    marginTop: s(2),
+    width: "85%",
+    height: s(58),
+    borderRadius: s(29),
+    flexDirection: "row",
+    gap: s(7),
+    alignItems: "center",
+    justifyContent: "center",
+    shadowColor: "#145E12",
+    shadowOffset: { width: 0, height: s(7) },
+    shadowOpacity: 0.38,
+    shadowRadius: s(9),
+    elevation: 9,
+    zIndex: 2,
+    overflow: "hidden",
+  },
+  instructionsButtonGradient: {
+    width: "100%",
+    height: "100%",
+    borderRadius: s(29),
+    borderWidth: s(2),
+    borderColor: "rgba(219, 255, 172, 0.9)",
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    overflow: "hidden",
+  },
+  instructionsButtonIcon: {
+    position: "absolute",
+    right: s(30),
+    width: s(30),
+    textAlign: "center",
+  },
+  instructionsButtonText: {
+    fontFamily: friendlyBoldFont,
+    color: "#FFFFFF",
+    fontSize: ms(27),
+    lineHeight: ms(32),
+    fontWeight: "900",
+    width: "100%",
+    textAlign: "center",
+    includeFontPadding: false,
+    transform: [{ translateX: s(-8) }],
+    textShadowColor: "rgba(33, 92, 18, 0.58)",
+    textShadowOffset: { width: 0, height: s(3) },
+    textShadowRadius: s(3),
+  },
+});
+}

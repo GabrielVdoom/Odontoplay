@@ -4,13 +4,12 @@ import {
   Image,
   ImageBackground,
   ImageSourcePropType,
-  Platform,
   Pressable,
   StyleSheet,
   Text,
   View,
 } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { signOut } from "firebase/auth";
 import { FontAwesome, Ionicons } from "@expo/vector-icons";
@@ -18,14 +17,19 @@ import { RootStackParamList } from "../App";
 import { useThemeMusic } from "../contexts/ThemeMusicContext";
 import { getCurrentUserProfile } from "../services/progress";
 import { auth } from "../services/firebase";
-import { getScreenMetrics } from "../utils/responsive";
+import { useSceneMetrics, WEB_IMAGE_FILL } from "../utils/responsive";
 import AccountDeletionControl from "./AccountDeletionControl";
 
 type Props = NativeStackScreenProps<RootStackParamList, "SelecaoJogos">;
 type GreetingGender = "Masculino" | "Feminino" | null;
-const { scale: s, moderateScale: ms } = getScreenMetrics();
 
 export default function SelecaoJogosScreen({ navigation }: Props) {
+  const metrics = useSceneMetrics();
+  const tablet = metrics.isTabletLayout;
+  const insets = useSafeAreaInsets();
+  const styles = metrics.isTabletLayout ? createTabletStyles(metrics, metrics.topInset) : createPhoneStyles(metrics, insets.top);
+  const { scale: s } = metrics;
+
   const [greeting, setGreeting] = useState("Seja bem-vindo!");
   const [greetingGender, setGreetingGender] = useState<GreetingGender>(null);
   const [accountOpen, setAccountOpen] = useState(false);
@@ -90,35 +94,15 @@ export default function SelecaoJogosScreen({ navigation }: Props) {
       style={styles.background}
       imageStyle={styles.backgroundImage}
     >
-      {/* Preserve the existing Android spacing; the legacy view only applied insets on iOS. */}
-      <SafeAreaView style={styles.safeArea} edges={Platform.OS === "ios" ? undefined : []}>
+      <View style={styles.safeArea}>
         <View style={styles.content}>
           <Pressable
             style={styles.backIconButton}
             hitSlop={0}
             onPress={handleBackToLogin}
           >
-            <Ionicons name="chevron-back" size={30} color="#FFFFFF" />
+            <Ionicons name="chevron-back" size={tablet ? 30 * metrics.contentScale : 30} color="#FFFFFF" />
           </Pressable>
-
-          <View style={styles.musicControlArea}>
-            <Pressable style={styles.musicButton} onPress={toggleMusic}>
-              <Image
-                source={require("../assets/selecao-jogos/botao_musica_desativado.png")}
-                style={[
-                  styles.musicButtonImage,
-                  isPlaying && styles.musicButtonHidden,
-                ]}
-              />
-              <Image
-                source={require("../assets/selecao-jogos/botao_musica_roxo5.png")}
-                style={[
-                  styles.musicButtonImage,
-                  !isPlaying && styles.musicButtonHidden,
-                ]}
-              />
-            </Pressable>
-          </View>
 
           <View style={styles.accountCardArea}>
           <Pressable
@@ -140,7 +124,7 @@ export default function SelecaoJogosScreen({ navigation }: Props) {
                 greetingGender === "Masculino" && styles.greetingIconMale,
               ]}
             >
-          <FontAwesome name="user" size={24} color="#FFFFFF" />
+          <FontAwesome name="user" size={tablet ? 24 * metrics.contentScale : 24} color="#FFFFFF" />
         </View>
         <Text
           style={styles.greetingText}
@@ -173,7 +157,7 @@ export default function SelecaoJogosScreen({ navigation }: Props) {
           )}
           </View>
 
-          <View style={styles.logoArea}>
+          <View pointerEvents="none" style={styles.logoArea}>
             <Image
               source={require("../assets/selecao-jogos/logo_selecao.png")}
               style={styles.logo}
@@ -199,8 +183,26 @@ export default function SelecaoJogosScreen({ navigation }: Props) {
               onPress={() => handleGamePress("jogo-2", "JOGO 2")}
             />
           </View>
+
+          <Pressable
+            style={[styles.musicControlArea, styles.musicButton]}
+            onPress={toggleMusic}
+            accessibilityRole="button"
+            accessibilityLabel={isPlaying ? "Desativar música" : "Ativar música"}
+          >
+            <Image
+              pointerEvents="none"
+              source={require("../assets/selecao-jogos/botao_musica_desativado.png")}
+              style={[styles.musicButtonImage, isPlaying && styles.musicButtonHidden]}
+            />
+            <Image
+              pointerEvents="none"
+              source={require("../assets/selecao-jogos/botao_musica_roxo5.png")}
+              style={[styles.musicButtonImage, !isPlaying && styles.musicButtonHidden]}
+            />
+          </Pressable>
         </View>
-      </SafeAreaView>
+      </View>
       {(hasAccount || accountOpen) && <AccountDeletionControl
         visible={accountOpen}
         success={accountDeleted}
@@ -234,10 +236,13 @@ function GameCard({
   cardStyle: object;
   onPress: () => void;
 }) {
+  const metrics = useSceneMetrics();
+  const styles = metrics.isTabletLayout ? createTabletStyles(metrics) : createPhoneStyles(metrics);
   return (
-    <View style={[styles.gameCard, cardStyle]}>
+    <View pointerEvents={metrics.isTabletLayout ? "box-none" : undefined} style={[styles.gameCard, cardStyle]}>
       <ImageBackground
         source={cardImage}
+        pointerEvents={metrics.isTabletLayout ? "box-none" : undefined}
         style={styles.gameCardBackground}
         imageStyle={styles.gameCardImage}
       >
@@ -257,11 +262,15 @@ function GameCard({
   );
 }
 
-const styles = StyleSheet.create({
+function createPhoneStyles(metrics: ReturnType<typeof useSceneMetrics>, topInset = 0) {
+  const { scale: s, moderateScale: ms } = metrics;
+
+  return StyleSheet.create({
   background: {
     flex: 1,
   },
   backgroundImage: {
+    ...WEB_IMAGE_FILL,
     resizeMode: "cover",
   },
   safeArea: {
@@ -272,7 +281,7 @@ const styles = StyleSheet.create({
   },
   backIconButton: {
     position: "absolute",
-    top: s(66),
+    top: Math.max(s(66), topInset),
     left: s(18),
     width: s(42),
     height: s(42),
@@ -291,14 +300,14 @@ const styles = StyleSheet.create({
   },
   musicControlArea: {
     position: "absolute",
-    top: s(36),
+    top: Math.max(s(36), topInset) + s(20),
     right: s(10),
     zIndex: 50,
-    alignItems: "flex-end",
+    elevation: 50,
   },
   accountCardArea: {
     position: "absolute",
-    top: s(60),
+    top: Math.max(s(60), topInset),
     left: s(68),
     zIndex: 45,
     elevation: 45,
@@ -382,7 +391,6 @@ const styles = StyleSheet.create({
   },
   musicButtonImage: {
     position: "absolute",
-    top: s(20),
     width: "100%",
     height: "100%",
     resizeMode: "contain",
@@ -437,6 +445,7 @@ const styles = StyleSheet.create({
     top: s(120),
   },
   gameCardImage: {
+    ...WEB_IMAGE_FILL,
     resizeMode: "stretch",
   },
   gameTextBlock: {
@@ -470,3 +479,248 @@ const styles = StyleSheet.create({
     resizeMode: "contain",
   },
 });
+}
+
+
+// Tablet-only styles. The phone styles above are preserved from the pre-tablet snapshot.
+function createTabletStyles(metrics: ReturnType<typeof useSceneMetrics>, topInset = 0) {
+  const { width, height, backgroundHeight, scale: s, moderateScale: ms } = metrics;
+  const backSize = Math.max(44, s(42));
+  const accountLeft = Math.max(s(68), s(18) + backSize + s(8));
+  const greetingWidth = Math.min(width - accountLeft - s(118), Math.max(s(200), 180));
+  // The PNG canvas includes transparent space above and below the card.
+  // Keep the canvas aspect ratio and position its play target in that same
+  // coordinate space, independently of text padding and intrinsic image size.
+  const zoom = metrics.contentScale;
+  const gutter = Math.max(16, Math.min(32 * zoom, width * 0.04));
+  const bottomGap = Math.max(gutter, metrics.bottomInset + 12 * zoom);
+  const artworkScale = 0.82;
+  const cardWidth = Math.min(width - gutter * 2, 760 * zoom) * 0.88;
+  const cardHeight = cardWidth * 1024 / 1536;
+  const visibleCardHeight = cardHeight * 0.48;
+  const cardGap = Math.max(16, Math.min(28 * zoom, height * 0.025));
+  const groupHeight = visibleCardHeight * 2 + cardGap;
+  const logoTop = Math.max(topInset + 100 * zoom, height * 0.12);
+  const logoHeight = Math.max(120, height - bottomGap - groupHeight - logoTop - gutter);
+  const contentLift = height * 0.09;
+  const playSize = Math.max(80, Math.min(144 * zoom, cardWidth * 0.22));
+
+  return StyleSheet.create({
+  background: {
+    flex: 1,
+  },
+  backgroundImage: {
+    width: "100%",
+    height: backgroundHeight,
+    resizeMode: "cover",
+  },
+  safeArea: {
+    flex: 1,
+  },
+  content: {
+    flex: 1,
+  },
+  backIconButton: {
+    position: "absolute",
+    top: topInset + s(18),
+    left: s(18),
+    width: backSize,
+    height: backSize,
+    borderRadius: s(21),
+    backgroundColor: "rgba(5, 47, 121, 0.52)",
+    borderWidth: 1,
+    borderColor: "rgba(205, 237, 255, 0.5)",
+    alignItems: "center",
+    justifyContent: "center",
+    zIndex: 120,
+    elevation: 120,
+    shadowColor: "#03194C",
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.22,
+    shadowRadius: 5,
+  },
+  musicControlArea: {
+    position: "absolute",
+    top: topInset + s(20),
+    right: s(10),
+    zIndex: 50,
+    elevation: 50,
+  },
+  accountCardArea: {
+    position: "absolute",
+    top: topInset + s(12),
+    left: accountLeft,
+    zIndex: 45,
+    elevation: 45,
+    paddingBottom: s(8),
+  },
+  greetingCard: {
+    width: greetingWidth,
+    minHeight: s(55),
+    borderRadius: s(30),
+    backgroundColor: "rgba(255,255,255,0.94)",
+    paddingHorizontal: s(10),
+    flexDirection: "row",
+    alignItems: "center",
+    gap: s(9),
+    zIndex: 45,
+    elevation: 45,
+    borderWidth: 1.5,
+    borderColor: "rgba(232, 219, 219, 0.95)",
+    shadowColor: "#1F6FB2",
+    shadowOpacity: 0.18,
+    shadowRadius: 6,
+  },
+  greetingIconCircle: {
+    width: s(40),
+    height: s(40),
+    borderRadius: s(20),
+    backgroundColor: "#2F80ED",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  deleteAccountButton: {
+    width: Math.max(s(175), 180),
+    height: s(40),
+    marginTop: s(8),
+    marginLeft: s(8),
+    paddingHorizontal: s(14),
+    flexDirection: "row",
+    alignItems: "center",
+    gap: s(8),
+    borderRadius: s(20),
+    backgroundColor: "#FBE1E4",
+    borderWidth: 1.1,
+    borderColor: "#C66472",
+    borderLeftWidth: 1.1,
+    borderLeftColor: "#C66472",
+  },
+  deleteAccountButtonPressed: {
+    backgroundColor: "#F6CFD3",
+  },
+  deleteAccountText: {
+    flex: 1,
+    minWidth: 0,
+    color: "#A52B38",
+    fontSize: ms(13),
+    lineHeight: s(20),
+    fontWeight: "600",
+    textAlign: "center",
+    includeFontPadding: false,
+  },
+  greetingIconMale: {
+    backgroundColor: "#2F80ED",
+  },
+  greetingIconFemale: {
+    backgroundColor: "#fd92c7",
+  },
+  greetingText: {
+    left: 1,
+    flex: 1,
+    minWidth: 0,
+    color: "#173A6A",
+    fontSize: ms(17),
+    lineHeight: ms(22),
+    fontWeight: "400",
+    includeFontPadding: false,
+  },
+  musicButton: {
+    width: s(100),
+    height: s(100),
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  musicButtonImage: {
+    position: "absolute",
+    width: "100%",
+    height: "100%",
+    resizeMode: "contain",
+  },
+  musicButtonHidden: {
+    opacity: 0,
+  },
+  logoArea: {
+    position: "absolute",
+    top: logoTop - contentLift,
+    left: gutter,
+    right: gutter,
+    height: logoHeight,
+    zIndex: 0,
+    elevation: 0,
+    alignItems: "center",
+  },
+  logo: {
+    width: Math.min(width - gutter * 2, 700 * zoom) * artworkScale,
+    height: logoHeight,
+    resizeMode: "contain",
+  },
+  spacer: {
+    height: 0,
+  },
+  gamesWrapper: {
+    position: "absolute",
+    left: (width - cardWidth) / 2,
+    bottom: bottomGap + contentLift,
+    width: cardWidth,
+    height: groupHeight,
+    zIndex: 10,
+    elevation: 10,
+  },
+  gameCard: {
+    position: "absolute",
+    left: 0,
+    right: 0,
+    height: cardHeight,
+    zIndex: 11,
+    elevation: 11,
+  },
+  gameCardBackground: {
+    width: cardWidth,
+    height: cardHeight,
+    justifyContent: "center",
+  },
+  gameCardJogo1: {
+    top: -cardHeight * 0.24,
+  },
+  gameCardJogo2: {
+    top: visibleCardHeight + cardGap - cardHeight * 0.24,
+  },
+  gameCardImage: {
+    width: cardWidth,
+    height: cardHeight,
+    resizeMode: "contain",
+  },
+  gameTextBlock: {
+    maxWidth: "100%",
+  },
+  gameTitle: {
+    marginLeft: s(8),
+    fontSize: ms(20),
+    fontWeight: "900",
+    color: "#FFFFFF",
+  },
+  gameSubtitle: {
+    marginLeft: s(8),
+    marginTop: s(3),
+    fontSize: ms(18),
+    fontWeight: "800",
+    color: "#FFFFFF",
+  },
+  playButtonWrapper: {
+    position: "absolute",
+    right: cardWidth * 0.06,
+    top: (cardHeight - playSize) / 2,
+    width: playSize,
+    height: playSize,
+    alignItems: "center",
+    justifyContent: "center",
+    zIndex: 20,
+    elevation: 20,
+  },
+  playButtonImage: {
+    width: s(130) * artworkScale * 1.3,
+    height: s(160) * artworkScale * 1.3,
+    resizeMode: "contain",
+  },
+});
+}

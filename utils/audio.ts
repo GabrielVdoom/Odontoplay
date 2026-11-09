@@ -6,5 +6,11 @@ const disposedPlayers = new WeakSet<AudioPlayer>();
 export function disposeAudioPlayer(player: AudioPlayer | null) {
   if (!player || disposedPlayers.has(player)) return;
   disposedPlayers.add(player);
-  player.remove();
+  // Stop immediately: remove() can only unregister the native player, leaving
+  // playback alive until the underlying object is released.
+  try {
+    player.pause();
+  } finally {
+    player.remove();
+  }
 }

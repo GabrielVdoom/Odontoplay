@@ -3,8 +3,10 @@ import { Asset } from "expo-asset";
 const initialImages = [
   require("../assets/splash/splash.png"),
   require("../assets/login/background_login6.png"),
+  require("../assets/login/background_login_tablet.png"),
   require("../assets/login/botao_entrar_verde.png"),
   require("../assets/cadastro/background_frutiger6.png"),
+  require("../assets/cadastro/background_cadastro_tablet.png"),
   require("../assets/cadastro/botao_entrar_azul.png"),
   require("../assets/selecao-jogos/background_selecao9.png"),
   require("../assets/selecao-jogos/botao_musica_desativado.png"),

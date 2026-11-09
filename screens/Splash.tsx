@@ -1,3 +1,4 @@
+import { useSceneMetrics, WEB_IMAGE_FILL } from "../utils/responsive";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   ImageBackground,
@@ -17,6 +18,10 @@ import { preloadAppAssets } from "../services/imagePreload";
 type Props = NativeStackScreenProps<RootStackParamList, "Splash">;
 
 export default function Splash({ navigation }: Props) {
+  const metrics = useSceneMetrics();
+  const tablet = metrics.isTabletLayout;
+  const styles = tablet ? createTabletStyles(metrics) : phoneStyles;
+
   const animationRef = useRef<LottieView>(null);
   const nextRouteRef = useRef<"SelecaoJogos" | "Login" | null>(null);
   const [appReady, setAppReady] = useState(false);
@@ -33,7 +38,7 @@ export default function Splash({ navigation }: Props) {
     let isMounted = true;
 
     if (Platform.OS === "android") {
-      void NavigationBar.setVisibilityAsync("hidden").catch(() => {});
+      void NavigationBar.setVisibilityAsync("visible").catch(() => {});
     }
 
     animationRef.current?.play();
@@ -93,14 +98,15 @@ export default function Splash({ navigation }: Props) {
   }
 
   return (
-    <SafeAreaView style={styles.container} edges={Platform.OS === "ios" ? undefined : []}>
-      <StatusBar backgroundColor="#FFFFFF" barStyle="dark-content" />
+    <SafeAreaView style={styles.container} edges={tablet ? [] : Platform.OS === "ios" ? undefined : []}>
+      <StatusBar barStyle="dark-content" />
       <LottieView
         ref={animationRef}
         source={require("../assets/splash/lottie_citec.json")}
         style={styles.animation}
-        resizeMode="cover"
-        autoPlay={false}
+        resizeMode={tablet ? "contain" : "cover"}
+        autoPlay={Platform.OS === "web"}
+        webStyle={{ width: "100%", height: "100%" }}
         loop={false}
         onAnimationFinish={() => setCesmacSplashFinished(true)}
       />
@@ -108,7 +114,7 @@ export default function Splash({ navigation }: Props) {
   );
 }
 
-const styles = StyleSheet.create({
+const phoneStyles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: "#FFFFFF",
@@ -120,6 +126,29 @@ const styles = StyleSheet.create({
   },
 
   backgroundImage: {
+    ...WEB_IMAGE_FILL,
     resizeMode: "cover",
   },
 });
+
+
+// Tablet-only styles. The phone styles above are preserved from the pre-tablet snapshot.
+function createTabletStyles(metrics: ReturnType<typeof useSceneMetrics>) {
+return StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: "#FFFFFF",
+  },
+
+  animation: {
+    width: "100%",
+    height: "100%",
+  },
+
+  backgroundImage: {
+    width: "100%",
+    height: metrics.backgroundHeight,
+    resizeMode: "cover",
+  },
+});
+}

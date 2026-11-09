@@ -6,6 +6,7 @@ import {
   ImageBackground,
   ImageSourcePropType,
   PanResponder,
+  Platform,
   Pressable,
   StyleSheet,
   Text,
@@ -25,23 +26,17 @@ import {
   saveUserPreferences,
   UserPreferences,
 } from "../services/progress";
-import { getScreenMetrics } from "../utils/responsive";
+import { getPhoneScreenMetrics, WEB_IMAGE_FILL, ScreenViewport, useSceneMetrics, useSceneBackdrop, FRIENDLY_FONT, SceneOverlay, containsPoint, getTabletActivityLayout, type HitRect } from "../utils/responsive";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-const { width, height, scale: s, moderateScale: ms } = getScreenMetrics();
+const gameFont = Platform.OS === "web" ? FRIENDLY_FONT : "Nunito_800ExtraBold";
 
-const MOUTH_HITBOX = {
-  x: width * 0.30,
-  y: height * 0.30,
-  width: width * 0.40,
-  height: height * 0.13,
-};
-
-const BRUSH_HITBOX = {
-  x: width * 0.58,
-  y: height - 245,
-  width: width * 0.36,
-  height: 170,
-};
+function getPhoneTargets({ width, height }: { width: number; height: number }) {
+  return {
+    mouth: { x: width * 0.30, y: height * 0.30, width: width * 0.40, height: height * 0.13 },
+    brush: { x: width * 0.58, y: height - 245, width: width * 0.36, height: 170 },
+  };
+}
 
 const REQUIRED_RUB_DISTANCE = 260;
 const MOUTH_FAST_TRANSITION = 820;
@@ -105,6 +100,23 @@ const gameItems: ItemConfig[] = [
 const expectedOrder: GameStep[] = ["pasta", "escova", "copo"];
 
 export default function Jogo2Screen({ navigation }: Props) {
+  const metrics = useSceneMetrics();
+  const tablet = metrics.isTabletLayout;
+  const [preferences, setPreferences] = useState<UserPreferences>(defaultPreferences);
+  const tabletStyles = tablet ? createTabletStyles(metrics, preferences.personagemJogo2) : undefined;
+  const styles = tabletStyles ?? createPhoneStyles(getPhoneScreenMetrics(metrics));
+  const renderedItems = tablet ? getTabletGameItems(metrics.scale, getTabletActivityLayout(metrics.width, metrics.height).itemScale) : gameItems;
+  const mouthTarget = useRef<React.ComponentRef<typeof View>>(null);
+  const brushTarget = useRef<React.ComponentRef<typeof View>>(null);
+  const targets = useRef<{ mouth: HitRect | null; brush: HitRect | null }>({ mouth: null, brush: null });
+  const refreshTargets = () => {
+    if (!tablet) return;
+    // PanResponder reports page coordinates; measure in the same coordinate
+    // system so Android's status bar cannot shift the target away from its art.
+    mouthTarget.current?.measure((_left,_top,width,height,x,y) => { targets.current.mouth = {x,y,width,height}; });
+    brushTarget.current?.measure((_left,_top,width,height,x,y) => { targets.current.brush = {x,y,width,height}; });
+  };
+
   const [mouthState, setMouthState] = useState<MouthState>("dirty");
   const [completedSteps, setCompletedSteps] = useState<GameStep[]>([]);
   const [mistakes, setMistakes] = useState(0);
@@ -112,8 +124,6 @@ export default function Jogo2Screen({ navigation }: Props) {
   const [showFinal, setShowFinal] = useState(false);
   const [showInstructions, setShowInstructions] = useState(true);
   const [showCharacterSelection, setShowCharacterSelection] = useState(false);
-  const [preferences, setPreferences] =
-    useState<UserPreferences>(defaultPreferences);
   const [brushHasPaste, setBrushHasPaste] = useState(false);
   const [lastSavedFinalKey, setLastSavedFinalKey] = useState("");
   const [isDraggingItem, setIsDraggingItem] = useState(false);
@@ -456,7 +466,7 @@ export default function Jogo2Screen({ navigation }: Props) {
           hitSlop={10}
           onPress={() => navigation.goBack()}
         >
-          <Ionicons name="chevron-back" size={30} color="#FFFFFF" />
+          <Ionicons name="chevron-back" size={tablet ? 30 * metrics.contentScale : 30} color="#FFFFFF" />
         </Pressable>
       ) : null}
 
@@ -474,6 +484,7 @@ export default function Jogo2Screen({ navigation }: Props) {
 
       <View style={styles.characterWrapper}>
         <View style={styles.characterStage}>
+          {tabletStyles && <View ref={mouthTarget} collapsable={false} pointerEvents="none" style={tabletStyles.mouthTarget} onLayout={refreshTargets} />}
           <Image
             source={selectedCharacterImages.dirty}
             style={[styles.character, styles.characterLayer]}
@@ -503,10 +514,13 @@ export default function Jogo2Screen({ navigation }: Props) {
         imageStyle={styles.itemsPanelImage}
       >
         <View style={styles.itemsRow}>
-          {gameItems.map((item) => (
+          {renderedItems.map((item) => (
             <DraggableItem
               key={item.id}
               item={item}
+              targets={targets}
+              refreshTargets={refreshTargets}
+              brushTarget={brushTarget}
               completed={completedSteps.includes(item.id)}
               brushHasPaste={brushHasPaste}
               onRubActive={setActiveRub}
@@ -529,7 +543,7 @@ export default function Jogo2Screen({ navigation }: Props) {
       </View>
 
       {showInstructions ? (
-        <View style={styles.instructionsOverlay}>
+        <SceneOverlay tablet={tablet} animated={false} style={styles.instructionsOverlay}>
           <View style={styles.instructionsBox}>
             <View style={styles.instructionsHeader}>
               <View style={styles.instructionsToothIconSlot}>
@@ -614,18 +628,18 @@ export default function Jogo2Screen({ navigation }: Props) {
                 </Text>
                 <Ionicons
                   name="chevron-forward"
-                  size={21}
+                  size={tablet ? 21 * metrics.contentScale : 21}
                   color="#FFFFFF"
                   style={styles.primaryButtonRightIcon}
                 />
               </LinearGradient>
             </Pressable>
           </View>
-        </View>
+        </SceneOverlay>
       ) : null}
 
       {showCharacterSelection ? (
-        <View style={styles.characterSelectionOverlay}>
+        <SceneOverlay tablet={tablet} animated={false} style={styles.characterSelectionOverlay}>
           <View style={styles.characterSelectionBox}>
             <View style={styles.characterSelectionHeader}>
               <View style={styles.characterSelectionToothSlot}>
@@ -684,14 +698,14 @@ export default function Jogo2Screen({ navigation }: Props) {
                 </Text>
                 <Ionicons
                   name="chevron-forward"
-                  size={21}
+                  size={tablet ? 21 * metrics.contentScale : 21}
                   color="#FFFFFF"
                   style={styles.primaryButtonRightIcon}
                 />
               </LinearGradient>
             </Pressable>
           </View>
-        </View>
+        </SceneOverlay>
       ) : null}
     </ImageBackground>
   );
@@ -708,6 +722,9 @@ function CharacterCard({
   active: boolean;
   onPress: () => void;
 }) {
+  const metrics = useSceneMetrics();
+  const styles = metrics.isTabletLayout ? createTabletStyles(metrics) : createPhoneStyles(getPhoneScreenMetrics(metrics));
+
   const isBoy = type === "menino";
   const iconSource = isBoy
     ? require("../assets/jogo2/icone_menino2.png")
@@ -759,6 +776,7 @@ function CharacterCard({
 
 function DraggableItem({
   item,
+  targets, refreshTargets, brushTarget,
   completed,
   onComplete,
   onRubActive,
@@ -768,6 +786,9 @@ function DraggableItem({
   brushHasPaste,
 }: {
   item: ItemConfig;
+  targets: React.MutableRefObject<{ mouth: HitRect | null; brush: HitRect | null }>;
+  refreshTargets: () => void;
+  brushTarget: React.RefObject<React.ComponentRef<typeof View> | null>;
   completed: boolean;
   onComplete: (step: GameStep) => void;
   onRubActive: (active: boolean) => void;
@@ -776,6 +797,18 @@ function DraggableItem({
   onDragChange: (active: boolean) => void;
   brushHasPaste: boolean;
 }) {
+  const metrics = useSceneMetrics();
+  const tablet = metrics.isTabletLayout;
+  const phoneMetrics = getPhoneScreenMetrics(metrics);
+  const styles = tablet ? createTabletStyles(metrics) : createPhoneStyles(phoneMetrics);
+  const hitboxes = getPhoneTargets(phoneMetrics);
+  const phoneTargets = useRef(hitboxes);
+  phoneTargets.current = hitboxes;
+  const refreshRef = useRef(refreshTargets);
+  refreshRef.current = refreshTargets;
+  const scaleRef = useRef(metrics.scale(1));
+  scaleRef.current = tablet ? styles.characterStage.width / 345 : metrics.scale(1);
+
   const pan = useRef(new Animated.ValueXY()).current;
   const rubDistance = useRef(0);
   const lastPoint = useRef<{ x: number; y: number } | null>(null);
@@ -797,16 +830,10 @@ function DraggableItem({
   }, [brushHasPaste, onComplete, onRubActive, onPastaOnMouth, onPrepareBrush, onDragChange]);
 
   const isInsideMouth = (x: number, y: number) =>
-    x >= MOUTH_HITBOX.x &&
-    x <= MOUTH_HITBOX.x + MOUTH_HITBOX.width &&
-    y >= MOUTH_HITBOX.y &&
-    y <= MOUTH_HITBOX.y + MOUTH_HITBOX.height;
+    containsPoint(tablet ? targets.current.mouth : phoneTargets.current.mouth, x, y);
 
   const isInsideBrush = (x: number, y: number) =>
-    x >= BRUSH_HITBOX.x &&
-    x <= BRUSH_HITBOX.x + BRUSH_HITBOX.width &&
-    y >= BRUSH_HITBOX.y &&
-    y <= BRUSH_HITBOX.y + BRUSH_HITBOX.height;
+    containsPoint(tablet ? targets.current.brush : phoneTargets.current.brush, x, y);
 
   const resetPosition = () => {
     Animated.spring(pan, {
@@ -822,6 +849,7 @@ function DraggableItem({
       onStartShouldSetPanResponder: () => true,
       onMoveShouldSetPanResponder: () => true,
       onPanResponderGrant: () => {
+        if (tablet) refreshRef.current();
         rubDistance.current = 0;
         lastPoint.current = null;
         gestureCompleted.current = false;
@@ -856,7 +884,7 @@ function DraggableItem({
         lastPoint.current = point;
         onRubActiveRef.current(true);
 
-        if (rubDistance.current >= REQUIRED_RUB_DISTANCE) {
+        if (rubDistance.current >= REQUIRED_RUB_DISTANCE * (tablet ? scaleRef.current : 1)) {
           gestureCompleted.current = true;
           onRubActiveRef.current(false);
           if (item.id === "pasta") {
@@ -894,6 +922,7 @@ function DraggableItem({
 
   return (
     <Animated.View
+      {...(tablet ? { ref: item.id === "escova" ? brushTarget : undefined, onLayout: refreshTargets, collapsable: false } : {})}
       {...panResponder.panHandlers}
       style={[
         styles.draggableItem,
@@ -912,7 +941,7 @@ function DraggableItem({
   );
 }
 
-function FinalScreen({
+function FinalContent({
   stars,
   onRetry,
   onExit,
@@ -921,6 +950,11 @@ function FinalScreen({
   onRetry: () => void;
   onExit: () => void;
 }) {
+  const metrics = useSceneMetrics();
+  const insets = useSafeAreaInsets();
+  const tablet = metrics.isTabletLayout;
+  const styles = tablet ? createTabletFinalStyles(metrics, metrics.topInset) : createFinalStyles(metrics, insets.top);
+  useSceneBackdrop(finalAssets.background);
   const titleByStars = {
     1: "Boa tentativa!",
     2: "Muito bem!",
@@ -947,11 +981,11 @@ function FinalScreen({
     >
 
       <Text style={styles.finalTitle}>{titleByStars[stars]}</Text>
-      <Text style={styles.finalSubtitle}>{subtitleByStars[stars]}</Text>
+      <Text style={styles.finalSubtitle} numberOfLines={tablet ? 2 : undefined} adjustsFontSizeToFit={tablet ? true : undefined} minimumFontScale={tablet ? 0.85 : undefined}>{subtitleByStars[stars]}</Text>
 
       <View style={styles.finalToothArea}>
         <Image source={finalAssets.tooth} style={styles.toothImage} />
-        <Text style={styles.toothText}>{toothTextByStars[stars]}</Text>
+        <Text style={styles.toothText} numberOfLines={tablet ? 1 : undefined} adjustsFontSizeToFit={tablet ? true : undefined} minimumFontScale={tablet ? 0.85 : undefined}>{toothTextByStars[stars]}</Text>
         <Image source={finalAssets.stars[stars]} style={styles.starsImage} />
       </View>
 
@@ -966,13 +1000,17 @@ function FinalScreen({
   );
 }
 
-const styles = StyleSheet.create({
+function createPhoneStyles(metrics: ReturnType<typeof getPhoneScreenMetrics>) {
+const { scale: s, moderateScale: ms } = metrics;
+const { mouth } = getPhoneTargets(metrics);
+return StyleSheet.create({
   background: {
     flex: 1,
     backgroundColor: "#EEF5FF",
   },
 
   backgroundImage: {
+    ...WEB_IMAGE_FILL,
     resizeMode: "cover",
   },
 
@@ -988,8 +1026,8 @@ const styles = StyleSheet.create({
   },
 
   exitButtonImage: {
-    width: s(120),
-    height: s(100),
+    width: s(132),
+    height: s(110),
     resizeMode: "contain",
   },
 
@@ -1015,8 +1053,8 @@ const styles = StyleSheet.create({
 
   rubFeedback: {
     position: "absolute",
-    left: MOUTH_HITBOX.x + MOUTH_HITBOX.width - 25,
-    top: MOUTH_HITBOX.y - 12,
+    left: mouth.x + mouth.width - 25,
+    top: mouth.y - 12,
     zIndex: 12,
   },
 
@@ -1094,6 +1132,7 @@ const styles = StyleSheet.create({
   },
 
   itemsPanelImage: {
+    ...WEB_IMAGE_FILL,
     resizeMode: "stretch",
   },
 
@@ -1130,109 +1169,6 @@ const styles = StyleSheet.create({
   gameFinishButton: {
     width: s(150),
     height: s(150),
-    resizeMode: "contain",
-  },
-
-  finalContainer: {
-    flex: 1,
-    backgroundColor: "#7FD2FF",
-    overflow: "hidden",
-  },
-
-  finalBackgroundImage: {
-    resizeMode: "cover",
-  },
-
-  finalTitle: {
-    position: "absolute",
-    top: s(82),
-    left: 0,
-    right: 0,
-    color: "#FFFFFF",
-    fontSize: ms(39),
-    fontWeight: "900",
-    textAlign: "center",
-    zIndex: 5,
-  },
-
-  finalSubtitle: {
-    position: "absolute",
-    top: s(140),
-    left: "11%",
-    width: "78%",
-    color: "#FF79B4",
-    fontSize: ms(25),
-    fontWeight: "900",
-    textAlign: "center",
-    zIndex: 5,
-  },
-
-  finalToothArea: {
-    position: "absolute",
-    top: s(200),
-    left: 0,
-    right: 0,
-    height: s(390),
-    alignItems: "center",
-    justifyContent: "center",
-    zIndex: 4,
-  },
-
-  toothImage: {
-    position: "absolute",
-    width: s(820),
-    resizeMode: "contain",
-  },
-
-  toothText: {
-    position: "absolute",
-    top: s(80),
-    left: 0,
-    right: 0,
-    color: "#F6C400",
-    fontSize: ms(28),
-    fontWeight: "900",
-    textAlign: "center",
-    zIndex: 6,
-  },
-
-  starsImage: {
-    top: s(-30),
-    width: s(250),
-    height: s(150),
-  },
-
-  retryButtonBox: {
-    position: "absolute",
-    top: s(583),
-    left: 0,
-    right: 0,
-    height: s(74),
-    alignItems: "center",
-    zIndex: 30,
-    elevation: 30,
-  },
-
-  retryButton: {
-    width: s(260),
-    height: s(74),
-    resizeMode: "contain",
-  },
-
-  finalExitButtonBox: {
-    position: "absolute",
-    top: s(675),
-    left: 0,
-    right: 0,
-    height: s(60),
-    alignItems: "center",
-    zIndex: 10,
-    elevation: 10,
-  },
-
-  sairButton: {                                          
-    width: s(180),
-    height: s(60),
     resizeMode: "contain",
   },
 
@@ -1288,7 +1224,7 @@ const styles = StyleSheet.create({
   },
 
   characterSelectionTitle: {
-    fontFamily: "Nunito_800ExtraBold",
+    fontFamily: gameFont,
     color: "#1557A7",
     fontSize: ms(26),
     lineHeight: ms(30),
@@ -1301,7 +1237,7 @@ const styles = StyleSheet.create({
   },
 
   characterSelectionSubtitle: {
-    fontFamily: "Nunito_800ExtraBold",
+    fontFamily: gameFont,
     marginTop: s(8),
     color: "#15376C",
     fontSize: ms(15),
@@ -1397,7 +1333,7 @@ const styles = StyleSheet.create({
   },
 
   characterCardTitle: {
-    fontFamily: "Nunito_800ExtraBold",
+    fontFamily: gameFont,
     marginTop: s(8),
     fontSize: ms(25),
     fontWeight: "900",
@@ -1417,7 +1353,7 @@ const styles = StyleSheet.create({
   },
 
   characterSelectionReady: {
-    fontFamily: "Nunito_800ExtraBold",
+    fontFamily: gameFont,
     marginTop: s(30),
     color: "#1D4E91",
     fontSize: ms(17),
@@ -1463,7 +1399,7 @@ const styles = StyleSheet.create({
   },
 
   characterContinueText: {
-    fontFamily: "Nunito_800ExtraBold",
+    fontFamily: gameFont,
     color: "#FFFFFF",
     fontSize: ms(19),
     lineHeight: ms(24),
@@ -1527,7 +1463,7 @@ const styles = StyleSheet.create({
   },
 
   instructionsTitle: {
-    fontFamily: "Nunito_800ExtraBold",
+    fontFamily: gameFont,
     color: "#2F64B1",
     fontSize: 23,
     lineHeight: 30,
@@ -1536,7 +1472,7 @@ const styles = StyleSheet.create({
   },
 
   instructionsIntro: {
-    fontFamily: "Nunito_800ExtraBold",
+    fontFamily: gameFont,
     marginTop: 15,
     color: "#15376c",
     fontSize: 17,
@@ -1547,7 +1483,7 @@ const styles = StyleSheet.create({
   },
 
   instructionsBadge: {
-    fontFamily: "Nunito_800ExtraBold",
+    fontFamily: gameFont,
     marginTop: 25,
     minWidth: 160,
     borderRadius: 24,
@@ -1641,7 +1577,7 @@ const styles = StyleSheet.create({
   },
 
   instructionsReady: {
-    fontFamily: "Nunito_800ExtraBold",
+    fontFamily: gameFont,
     marginTop: 21,
     color: "#1D4E91",
     fontSize: 17,
@@ -1682,7 +1618,7 @@ const styles = StyleSheet.create({
   },
 
   instructionsButtonText: {
-    fontFamily: "Nunito_800ExtraBold",
+    fontFamily: gameFont,
     color: "#FFFFFF",
     fontSize: 19,
     lineHeight: 24,
@@ -1704,3 +1640,932 @@ const styles = StyleSheet.create({
   */
 
 });
+}
+
+function FinalScreen(props: React.ComponentProps<typeof FinalContent>) {
+  const tablet = useSceneMetrics().isTabletLayout;
+  return tablet ? <FinalContent {...props} /> : <ScreenViewport><FinalContent {...props} /></ScreenViewport>;
+}
+
+function createFinalStyles(metrics: ReturnType<typeof useSceneMetrics>, topInset: number) {
+  const { scale: s, moderateScale: ms } = metrics;
+  return StyleSheet.create({
+  finalContainer: {
+    flex: 1,
+    backgroundColor: "#7FD2FF",
+    overflow: "hidden",
+  },
+
+  finalBackgroundImage: {
+    ...WEB_IMAGE_FILL,
+    resizeMode: "cover",
+  },
+
+  finalTitle: {
+    position: "absolute",
+    top: Math.max(s(82), topInset),
+    left: 0,
+    right: 0,
+    color: "#FFFFFF",
+    fontSize: ms(39),
+    fontWeight: "900",
+    textAlign: "center",
+    zIndex: 5,
+  },
+
+  finalSubtitle: {
+    position: "absolute",
+    top: s(140),
+    left: "11%",
+    width: "78%",
+    color: "#FF79B4",
+    fontSize: ms(25),
+    fontWeight: "900",
+    textAlign: "center",
+    zIndex: 5,
+  },
+
+  finalToothArea: {
+    position: "absolute",
+    top: s(200),
+    left: 0,
+    right: 0,
+    height: s(390),
+    alignItems: "center",
+    justifyContent: "center",
+    zIndex: 4,
+  },
+
+  toothImage: {
+    position: "absolute",
+    width: s(820),
+    aspectRatio: 1536 / 1024,
+    resizeMode: "contain",
+  },
+
+  toothText: {
+    position: "absolute",
+    top: s(80),
+    left: 0,
+    right: 0,
+    color: "#F6C400",
+    fontSize: ms(28),
+    fontWeight: "900",
+    textAlign: "center",
+    zIndex: 6,
+  },
+
+  starsImage: {
+    top: s(-30),
+    width: s(250),
+    height: s(150),
+  },
+
+  retryButtonBox: {
+    position: "absolute",
+    top: s(583),
+    left: 0,
+    right: 0,
+    height: s(74),
+    alignItems: "center",
+    zIndex: 30,
+    elevation: 30,
+  },
+
+  retryButton: {
+    width: s(260),
+    height: s(74),
+    resizeMode: "contain",
+  },
+
+  finalExitButtonBox: {
+    position: "absolute",
+    top: s(669),
+    left: 0,
+    right: 0,
+    height: s(66),
+    alignItems: "center",
+    zIndex: 10,
+    elevation: 10,
+  },
+
+  sairButton: {
+    width: s(198),
+    height: s(66),
+    resizeMode: "contain",
+  },
+
+  });
+}
+
+
+function getTabletGameItems(scale: (value: number) => number, maxScale = Number.POSITIVE_INFINITY): ItemConfig[] {
+  const s = (value: number) => Math.min(scale(value) * 1.2, value * maxScale);
+  return [
+  {
+    id: "copo",
+    source: require("../assets/jogo2/copo.png"),
+    imageStyle: { width: s(118), height: s(150), resizeMode: "contain" },
+  },
+  {
+    id: "pasta",
+    source: require("../assets/jogo2/pasta.png"),
+    imageStyle: { width: s(110), height: s(150), resizeMode: "contain" },
+  },
+  {
+    id: "escova",
+    source: require("../assets/jogo2/escova.png"),
+    imageStyle: { width: s(115), height: s(165), top: s(10), resizeMode: "contain" },
+  },
+
+];
+
+}
+
+function createTabletFinalStyles(metrics: ReturnType<typeof useSceneMetrics>, topInset: number) {
+  const { backgroundHeight } = metrics;
+  const originalUnit = metrics.scale(1);
+  const bottomMargin = Math.max(metrics.bottomInset + 16, metrics.height * 0.08);
+  const resultHeight = 735;
+  const unit = Math.min(originalUnit * 1.18, 1.6 * metrics.contentScale, metrics.width / 440,
+    (metrics.height - bottomMargin) / resultHeight);
+  const s = (value: number) => value * unit;
+  const ms = (value: number) => metrics.moderateScale(value) * unit / originalUnit;
+  const sceneTop = Math.max(0, Math.min((metrics.height - s(800)) / 2, metrics.height - bottomMargin - s(resultHeight)));
+  return StyleSheet.create({
+  finalContainer: {
+    flex: 1,
+    backgroundColor: "#7FD2FF",
+    overflow: "hidden",
+  },
+
+  finalBackgroundImage: {
+    width: "100%",
+    height: backgroundHeight,
+    resizeMode: "cover",
+  },
+
+  finalTitle: {
+    position: "absolute",
+    top: Math.max(sceneTop + s(82), topInset),
+    left: 0,
+    right: 0,
+    color: "#FFFFFF",
+    fontSize: Math.min(ms(39), s(44)),
+    fontWeight: "900",
+    textAlign: "center",
+    zIndex: 5,
+  },
+
+  finalSubtitle: {
+    position: "absolute",
+    top: sceneTop + s(140),
+    left: "11%",
+    width: "78%",
+    color: "#FF79B4",
+    fontSize: Math.min(ms(25), s(26)),
+    lineHeight: Math.min(ms(30), s(32)),
+    fontWeight: "900",
+    textAlign: "center",
+    zIndex: 5,
+  },
+
+  finalToothArea: {
+    position: "absolute",
+    top: sceneTop + s(200),
+    left: 0,
+    right: 0,
+    height: s(390),
+    alignItems: "center",
+    justifyContent: "center",
+    zIndex: 4,
+  },
+
+  toothImage: {
+    position: "absolute",
+    width: s(820),
+    aspectRatio: 1536 / 1024,
+    resizeMode: "contain",
+  },
+
+  toothText: {
+    position: "absolute",
+    top: s(80),
+    left: 0,
+    right: 0,
+    color: "#F6C400",
+    fontSize: Math.min(ms(28), s(28)),
+    fontWeight: "900",
+    textAlign: "center",
+    zIndex: 6,
+  },
+
+  starsImage: {
+    top: s(-30),
+    width: s(250),
+    height: s(150),
+  },
+
+  retryButtonBox: {
+    position: "absolute",
+    top: sceneTop + s(583),
+    left: 0,
+    right: 0,
+    height: s(74),
+    alignItems: "center",
+    zIndex: 30,
+    elevation: 30,
+  },
+
+  retryButton: {
+    width: s(260),
+    height: s(74),
+    resizeMode: "contain",
+  },
+
+  finalExitButtonBox: {
+    position: "absolute",
+    top: sceneTop + s(669),
+    left: 0,
+    right: 0,
+    height: s(66),
+    alignItems: "center",
+    zIndex: 10,
+    elevation: 10,
+  },
+
+  sairButton: {
+    width: s(198),
+    height: s(66),
+    resizeMode: "contain",
+  },
+
+  });
+}
+
+// Tablet-only styles. The phone styles above are preserved from the pre-tablet snapshot.
+function createTabletStyles(metrics: ReturnType<typeof useSceneMetrics>, character?: CharacterOption) {
+const { scale: s, moderateScale: ms, backgroundHeight } = metrics;
+const layout = getTabletActivityLayout(metrics.width, metrics.height, metrics.bottomInset);
+const characterTop = Math.max(metrics.topInset + s(52), metrics.height * 0.10);
+const portraitWidth = Math.min(1, Math.max(0, (metrics.width / metrics.height - 5 / 8) / 0.07));
+const characterLift = character === "menina" ? s(12 + 48 * portraitWidth) : 0;
+const characterHeight = Math.min(metrics.height * 0.80 * metrics.contentScale,
+  metrics.height - characterTop - metrics.bottomInset, s(760));
+const characterWidth = characterHeight * 345 / 610;
+const characterScale = characterWidth / 345;
+const c = (value: number) => value * characterScale;
+const instructionsTextScale = 1.16;
+return StyleSheet.create({
+  background: {
+    flex: 1,
+    backgroundColor: "#EEF5FF",
+  },
+
+  backgroundImage: {
+    width: "100%",
+    height: backgroundHeight,
+    resizeMode: "cover",
+  },
+
+  overlay: {
+    flex: 1,
+  },
+
+  exitButton: {
+    position: "absolute",
+    top: Math.max(s(48), metrics.topInset),
+    right: s(18),
+    zIndex: 40,
+  },
+
+  exitButtonImage: {
+    width: s(132),
+    height: s(110),
+    resizeMode: "contain",
+  },
+
+  backIconButton: {
+    position: "absolute",
+    top: s(48),
+    left: s(18),
+    width: Math.max(44, s(42)),
+    height: Math.max(44, s(42)),
+    borderRadius: s(21),
+    backgroundColor: "rgba(5, 47, 121, 0.52)",
+    borderWidth: s(1),
+    borderColor: "rgba(205, 237, 255, 0.5)",
+    alignItems: "center",
+    justifyContent: "center",
+    zIndex: 120,
+    elevation: 120,
+    shadowColor: "#03194C",
+    shadowOffset: { width: 0, height: s(3) },
+    shadowOpacity: 0.22,
+    shadowRadius: s(5),
+  },
+
+  rubFeedback: {
+    position: "absolute",
+    left: metrics.width / 2 + s(40),
+    top: s(300) - characterLift,
+    zIndex: 12,
+  },
+
+  sparkleDot: {
+    width: s(18),
+    height: s(18),
+    borderRadius: s(9),
+    backgroundColor: "#FFFFFF",
+    borderWidth: s(3),
+    borderColor: "#8EE8FF",
+  },
+
+  sparkleDotSmall: {
+    width: s(12),
+    height: s(12),
+    borderRadius: s(6),
+    marginLeft: s(26),
+    marginTop: s(-4),
+    backgroundColor: "#FFF5A8",
+    borderWidth: s(2.5),
+    borderColor: "#FFFFFF",
+  },
+
+  sparkleDotTiny: {
+    width: s(8),
+    height: s(8),
+    borderRadius: s(4),
+    marginLeft: s(10),
+    marginTop: s(8),
+    backgroundColor: "#FFFFFF",
+  },
+
+  characterWrapper: {
+    position: "absolute",
+    left: 0,
+    right: 0,
+    top: characterTop - characterLift,
+    zIndex: 4,
+    alignItems: "center",
+  },
+
+  characterStage: {
+    width: characterWidth,
+    height: characterHeight,
+  },
+
+  character: {
+    width: characterWidth,
+    height: characterHeight,
+    resizeMode: "contain",
+  },
+
+  mouthTarget: {
+    position: "absolute",
+    left: c(345 * 0.31),
+    top: c((610 - 345 * 1.5) / 2 + 345 * 1.5 * 0.32),
+    width: c(345 * 0.36),
+    height: c(345 * 1.5 * 0.18),
+    zIndex: 1,
+  },
+
+  characterLayer: {
+    position: "absolute",
+    left: 0,
+    top: 0,
+  },
+
+  itemsPanel: {
+    position: "absolute",
+    left: layout.trayLeft,
+    width: layout.trayWidth,
+    bottom: layout.trayBottom,
+    height: layout.trayHeight,
+    zIndex: 6,
+    paddingHorizontal: layout.padding,
+    paddingVertical: layout.padding,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
+  itemsPanelDragging: {
+    zIndex: 60,
+    elevation: 60,
+  },
+
+  itemsPanelImage: {
+    width: layout.trayWidth,
+    height: layout.trayHeight,
+    resizeMode: "contain",
+  },
+
+  itemsRow: {
+    width: "100%",
+    height: "100%",
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+
+  draggableItem: {
+    alignItems: "center",
+    justifyContent: "center",
+    zIndex: 20,
+  },
+
+  gameFinishButtonArea: {
+    position: "absolute",
+    bottom: layout.trayBottom + layout.trayHeight + s(14),
+    left: 0,
+    right: 0,
+    alignItems: "center",
+    zIndex: 25,
+  },
+
+  gameFinishButtonPressable: {
+    width: s(165),
+    // The square image has transparent margins around the pink button.
+    height: Math.max(44, s(62)),
+    alignItems: "center",
+    justifyContent: "center",
+    overflow: "hidden",
+  },
+
+  gameFinishButton: {
+    width: s(165),
+    height: s(165),
+    resizeMode: "contain",
+  },
+
+  characterSelectionOverlay: {
+    ...StyleSheet.absoluteFill,
+    zIndex: 30,
+    backgroundColor: "rgba(17, 74, 121, 0.28)",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: s(28),
+  },
+
+  characterSelectionBox: {
+    width: "93%",
+    maxWidth: s(385),
+    minHeight: s(500),
+    padding: s(10),
+    borderRadius: s(28),
+    backgroundColor: "rgba(250, 254, 255, 0.98)",
+    borderWidth: s(2),
+    borderColor: "#64B5F6",
+    paddingHorizontal: s(16),
+    paddingVertical: s(22),
+    alignItems: "center",
+    justifyContent: "flex-start",
+    shadowColor: "#075B9C",
+    shadowOffset: { width: 0, height: s(5) },
+    shadowOpacity: 0.12,
+    shadowRadius: s(12),
+    elevation: 5,
+  },
+
+  characterSelectionHeader: {
+    width: "100%",
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: s(10),
+  },
+
+  characterSelectionToothSlot: {
+    width: s(44),
+    height: s(44),
+    alignItems: "center",
+    justifyContent: "center",
+    overflow: "visible",
+  },
+
+  characterSelectionTooth: {
+    width: s(134),
+    height: s(104),
+    resizeMode: "contain",
+  },
+
+  characterSelectionTitle: {
+    fontFamily: FRIENDLY_FONT,
+    color: "#1557A7",
+    fontSize: ms(26),
+    lineHeight: ms(30),
+    fontWeight: "900",
+    textAlign: "left",
+    letterSpacing: 0.2,
+    textShadowColor: "rgba(149, 220, 255, 0.25)",
+    textShadowOffset: { width: 0, height: s(1) },
+    textShadowRadius: s(1),
+  },
+
+  characterSelectionSubtitle: {
+    fontFamily: FRIENDLY_FONT,
+    marginTop: s(8),
+    color: "#15376C",
+    fontSize: ms(15),
+    fontWeight: "800",
+    textAlign: "center",
+  },
+
+  characterCardsRow: {
+    width: "100%",
+    flexDirection: "row",
+    justifyContent: "center",
+    gap: s(12),
+  },
+
+  characterCardsPanel: {
+    width: "100%",
+    marginTop: s(24),
+    borderRadius: s(20),
+    backgroundColor: "rgba(238, 249, 255, 0.72)",
+    borderWidth: s(1),
+    borderColor: "rgba(192, 234, 255, 0.86)",
+    paddingHorizontal: s(10),
+    paddingTop: s(12),
+    paddingBottom: s(12),
+  },
+
+  characterCard: {
+    position: "relative",
+    width: "46%",
+    height: s(206),
+    borderRadius: s(22),
+    borderWidth: s(2),
+    paddingHorizontal: s(8),
+    paddingTop: s(10),
+    paddingBottom: s(10),
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "transparent",
+    shadowColor: "#176EAE",
+    shadowOffset: { width: 0, height: s(2) },
+    shadowOpacity: 0.06,
+    shadowRadius: s(4),
+    elevation: 2,
+  },
+
+  characterCardBoy: {
+    borderColor: "#64B5F6",
+  },
+
+  characterCardGirl: {
+    borderColor: "#F48FBE",
+  },
+
+  characterCardBoyActive: {
+    borderColor: "#1489E8",
+    borderWidth: s(3),
+    backgroundColor: "rgba(224, 244, 255, 0.52)",
+    shadowColor: "#3498DB",
+    shadowOffset: { width: 0, height: s(3) },
+    shadowOpacity: 0.1,
+    shadowRadius: s(6),
+    elevation: 3,
+    transform: [{ scale: 1.01 }],
+  },
+
+  characterCardGirlActive: {
+    borderColor: "#E94491",
+    borderWidth: s(3),
+    backgroundColor: "rgba(255, 237, 247, 0.58)",
+    shadowColor: "#F48FBE",
+    shadowOffset: { width: 0, height: s(3) },
+    shadowOpacity: 0.1,
+    shadowRadius: s(6),
+    elevation: 3,
+    transform: [{ scale: 1.01 }],
+  },
+  characterCardGradient: {
+    ...StyleSheet.absoluteFill,
+    borderRadius: s(19),
+  },
+  characterCardIconSlot: {
+    width: s(112),
+    height: s(112),
+    alignItems: "center",
+    justifyContent: "center",
+    overflow: "visible",
+  },
+
+  characterCardIcon: {
+    width: s(255),
+    height: s(255),
+    resizeMode: "contain",
+  },
+
+  characterCardTitle: {
+    fontFamily: FRIENDLY_FONT,
+    marginTop: s(8),
+    fontSize: ms(25),
+    fontWeight: "900",
+    textAlign: "center",
+  },
+
+  characterCardTitleBoy: {
+    color: "#1F8CE3",
+  },
+
+  characterCardTitleGirl: {
+    color: "#EB6AA3",
+  },
+
+  characterCardTitleActive: {
+    transform: [{ scale: 1.02 }],
+  },
+
+  characterSelectionReady: {
+    fontFamily: FRIENDLY_FONT,
+    marginTop: s(30),
+    color: "#1D4E91",
+    fontSize: ms(21),
+    fontWeight: "900",
+    textAlign: "center",
+    letterSpacing: 0.15,
+    textShadowColor: "rgba(186, 234, 255, 0.25)",
+    textShadowOffset: { width: 0, height: s(1) },
+    textShadowRadius: s(1),
+  },
+
+  characterContinueButton: {
+    marginTop: s(13),
+    minWidth: s(190),
+    height: Math.max(44, s(46)),
+    borderRadius: s(23),
+    alignItems: "center",
+    justifyContent: "center",
+    shadowColor: "#02649F",
+    shadowOffset: { width: 0, height: s(7) },
+    shadowOpacity: 0.32,
+    shadowRadius: s(11),
+    elevation: 9,
+    overflow: "hidden",
+  },
+
+  characterContinueGradient: {
+    width: "100%",
+    height: "100%",
+    borderRadius: s(23),
+    borderWidth: s(2.5),
+    borderColor: "rgba(196, 237, 255, 0.95)",
+    position: "relative",
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: s(18),
+  },
+
+  primaryButtonRightIcon: {
+    position: "absolute",
+    right: s(18),
+  },
+
+  characterContinueText: {
+    fontFamily: FRIENDLY_FONT,
+    color: "#FFFFFF",
+    fontSize: ms(19),
+    lineHeight: ms(24),
+    fontWeight: "900",
+    textShadowColor: "rgba(4, 68, 123, 0.45)",
+    textShadowOffset: { width: 0, height: s(2) },
+    textShadowRadius: s(2),
+    width: "100%",
+    textAlign: "center",
+    includeFontPadding: false,
+  },
+
+  instructionsOverlay: {
+    ...StyleSheet.absoluteFill,
+    zIndex: 50,
+    backgroundColor: "rgba(17, 74, 121, 0.28)",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: s(28),
+  },
+
+  instructionsBox: {
+    width: "93%",
+    maxWidth: s(400),
+    minHeight: s(500),
+    borderRadius: s(26),
+    backgroundColor: "rgba(255, 255, 255, 0.98)",
+    borderWidth: s(2),
+    borderColor: "#64B5F6",
+    paddingHorizontal: s(16),
+    paddingVertical: s(20),
+    alignItems: "center",
+    shadowColor: "#0369A1",
+    shadowOpacity: 0.22,
+    shadowRadius: s(18),
+    elevation: 10,
+  },
+
+  instructionsHeader: {
+    marginTop: s(5),
+    width: "100%",
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: s(3),
+  },
+
+  instructionsToothIconSlot: {
+    width: s(44),
+    height: s(44),
+    alignItems: "center",
+    justifyContent: "center",
+    overflow: "visible",
+  },
+
+  instructionsToothIcon: {
+    right: s(10),
+    width: s(120),
+    height: s(120),
+    resizeMode: "contain",
+  },
+
+  instructionsTitle: {
+    flexShrink: 1,
+    fontFamily: FRIENDLY_FONT,
+    color: "#2F64B1",
+    fontSize: ms(23) * instructionsTextScale,
+    lineHeight: ms(30) * instructionsTextScale,
+    fontWeight: "900",
+    textAlign: "left",
+  },
+
+  instructionsIntro: {
+    fontFamily: FRIENDLY_FONT,
+    marginTop: s(15),
+    color: "#15376c",
+    fontSize: ms(17) * instructionsTextScale,
+    marginBottom: s(5),
+    lineHeight: ms(20) * instructionsTextScale,
+    fontWeight: "800",
+    textAlign: "center",
+  },
+
+  instructionsBadge: {
+    fontFamily: FRIENDLY_FONT,
+    marginTop: s(25),
+    minWidth: s(160),
+    borderRadius: s(24),
+    backgroundColor: "#3498DB",
+    color: "#FFFFFF",
+    fontSize: ms(15.5) * instructionsTextScale,
+    fontWeight: "800",
+    textAlign: "center",
+    paddingVertical: s(7),
+    overflow: "hidden",
+    zIndex: 2,
+  },
+
+  instructionsSteps: {
+    width: "100%",
+    marginTop: s(-5),
+    borderRadius: s(16),
+    backgroundColor: "#EFFBFF",
+    borderWidth: s(1),
+    borderColor: "#D7F0FF",
+    paddingHorizontal: s(12),
+    paddingTop: s(14),
+    paddingBottom: s(10),
+  },
+
+  instructionsStep: {
+    minHeight: s(60),
+    flexDirection: "row",
+    alignItems: "center",
+    gap: s(9),
+  },
+
+  instructionsStepNumber: {
+    width: s(26),
+    height: s(26),
+    borderRadius: s(13),
+    backgroundColor: "#3498DB",
+    color: "#FFFFFF",
+    fontSize: ms(15) * instructionsTextScale,
+    lineHeight: ms(26),
+    fontWeight: "900",
+    textAlign: "center",
+    overflow: "hidden",
+  },
+
+  instructionsStepIcon: {
+    width: s(36),
+    color: "#1D8FE8",
+    fontSize: ms(24) * instructionsTextScale,
+    textAlign: "center",
+  },
+
+  instructionsHandImage: {
+    width: s(75),
+    height: s(75),
+    resizeMode: "contain",
+  },
+
+  instructionsBrushImage: {
+    width: s(70),
+    height: s(70),
+    resizeMode: "contain",
+  },
+
+  instructionsToothImage: {
+    width: s(90),
+    height: s(90),
+    resizeMode: "contain",
+  },
+
+  instructionsStepImageSlot: {
+    width: s(36),
+    height: s(36),
+    alignItems: "center",
+    justifyContent: "center",
+    overflow: "visible",
+  },
+
+  instructionsStepText: {
+    flex: 1,
+    color: "#243B63",
+    fontSize: ms(14) * instructionsTextScale,
+    lineHeight: ms(18) * instructionsTextScale,
+    fontWeight: "400",
+  },
+
+  instructionsStepDivider: {
+    height: s(1),
+    marginLeft: s(40),
+    backgroundColor: "#D6EAF8",
+  },
+
+  instructionsReady: {
+    fontFamily: FRIENDLY_FONT,
+    marginTop: s(21),
+    color: "#1D4E91",
+    fontSize: ms(21),
+    fontWeight: "900",
+    textAlign: "center",
+    letterSpacing: 0.15,
+    textShadowColor: "rgba(186, 234, 255, 0.25)",
+    textShadowOffset: { width: 0, height: s(1) },
+    textShadowRadius: s(1),
+  },
+
+  instructionsButton: {
+    marginTop: s(12),
+    minWidth: s(205),
+    height: Math.max(44, s(46)),
+    borderRadius: s(23),
+    alignItems: "center",
+    justifyContent: "center",
+    shadowColor: "#02649F",
+    shadowOffset: { width: 0, height: s(7) },
+    shadowOpacity: 0.32,
+    shadowRadius: s(11),
+    elevation: 9,
+    overflow: "hidden",
+  },
+
+  instructionsButtonGradient: {
+    width: "100%",
+    height: "100%",
+    borderRadius: s(23),
+    borderWidth: s(2.5),
+    borderColor: "rgba(196, 237, 255, 0.95)",
+    position: "relative",
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: s(18),
+  },
+
+  instructionsButtonText: {
+    fontFamily: FRIENDLY_FONT,
+    color: "#FFFFFF",
+    fontSize: ms(19) * instructionsTextScale,
+    lineHeight: ms(24) * instructionsTextScale,
+    fontWeight: "900",
+    textShadowColor: "rgba(4, 68, 123, 0.45)",
+    textShadowOffset: { width: 0, height: s(2) },
+    textShadowRadius: s(2),
+    width: "100%",
+    textAlign: "center",
+    includeFontPadding: false,
+  },
+  /*
+  sairButton: {   usado no exit3
+    top: 35,
+    width: 190,
+    height: 300,
+    resizeMode: "contain",
+  },
+  */
+
+});
+
+}

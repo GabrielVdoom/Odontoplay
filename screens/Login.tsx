@@ -22,25 +22,25 @@ import { signInWithEmailAndPassword, signOut } from "firebase/auth";
 import { RootStackParamList } from "../App";
 import { auth, db } from "../services/firebase";
 import { useThemeMusic } from "../contexts/ThemeMusicContext";
-import { getScreenMetrics } from "../utils/responsive";
-
-const { width, height, scale: s, moderateScale: ms } = getScreenMetrics();
-
-// RESPONSIVO
-const FORM_TOP = s(435);
-const REGISTER_TOP = s(663);
-const REGISTER_WIDTH = s(267);
-const DEMO_TOP = s(741);
-const PASSWORD_FOCUS_SHIFT = -Math.min(height * 0.18, 145);
+import { useSceneMetrics, useFormScroll, TabletFormScroll, getTabletAuthLayout, WEB_IMAGE_FILL } from "../utils/responsive";
 
 type Props = NativeStackScreenProps<RootStackParamList, "Login">;
 
 export default function LoginScreen({ navigation }: Props) {
+  const metrics = useSceneMetrics();
+  const tablet = metrics.isTabletLayout;
+  const styles = tablet ? createTabletStyles(metrics) : createPhoneStyles(metrics);
+  const formScroll = useFormScroll(tablet);
+  const inputIconSize = (value: number) => tablet ? Math.round(value * Math.min(1.25 * metrics.contentScale, metrics.scale(1))) : value;
+  const { height } = metrics;
+  const PASSWORD_FOCUS_SHIFT = -Math.min(height * 0.18, 145);
+
   const [showPassword, setShowPassword] = useState(false);
   const { stopMusic } = useThemeMusic();
   const screenShift = useRef(new Animated.Value(0)).current;
   const passwordFocusedRef = useRef(false);
-  const passwordInputRef = useRef<TextInput>(null);
+  const tabletEmailRef = useRef<React.ComponentRef<typeof TextInput>>(null);
+  const passwordInputRef = useRef<React.ComponentRef<typeof TextInput>>(null);
 
   useFocusEffect(
     useCallback(() => {
@@ -99,7 +99,8 @@ export default function LoginScreen({ navigation }: Props) {
 
   const handlePasswordFocus = () => {
     passwordFocusedRef.current = true;
-    animateScreenShift(PASSWORD_FOCUS_SHIFT);
+    if (tablet) formScroll.onFocus(passwordInputRef.current);
+    else animateScreenShift(PASSWORD_FOCUS_SHIFT);
   };
 
   const handlePasswordBlur = () => {
@@ -118,14 +119,16 @@ export default function LoginScreen({ navigation }: Props) {
         ]}
       >
         <ImageBackground
-          source={require("../assets/login/background_login6.png")}
+          source={tablet ? require("../assets/login/background_login_tablet.png") : require("../assets/login/background_login6.png")}
           style={styles.background}
           imageStyle={styles.bgImage}
         >
       <KeyboardAvoidingView
         behavior={Platform.OS === "ios" ? "padding" : undefined}
-        style={styles.container}
+        style={tablet ? { flex: 1 } : styles.container}
       >
+        <TabletFormScroll enabled={tablet} scroll={formScroll} style={styles.container}>
+
         {/* FORMULÁRIO */}
         <View style={styles.formArea}>
           <Formik
@@ -145,10 +148,12 @@ export default function LoginScreen({ navigation }: Props) {
                   ]}
                 >
                   <View style={styles.iconCircle}>
-                    <FontAwesome name="envelope" size={20} color="#ffffff" />
+                    <FontAwesome name="envelope" size={inputIconSize(20)} color="#ffffff" />
                   </View>
 
                   <TextInput
+                    ref={tablet ? tabletEmailRef : undefined}
+                    onFocus={tablet ? () => formScroll.onFocus(tabletEmailRef.current) : undefined}
                     style={styles.input}
                     placeholder={
                       touched.email && errors.email
@@ -156,7 +161,7 @@ export default function LoginScreen({ navigation }: Props) {
                         : "Digite seu email"
                     }
                     placeholderTextColor={
-                      touched.email && errors.email ? "#E74C3C" : "#999"
+                      touched.email && errors.email ? "#E74C3C" : (tablet ? "#58748D" : "#999")
                     }
                     onChangeText={handleChange("email")}
                     value={values.email}
@@ -175,7 +180,7 @@ export default function LoginScreen({ navigation }: Props) {
                   ]}
                 >
                   <View style={styles.iconCircle}>
-                    <FontAwesome name="lock" size={25} color="#ffffff" />
+                    <FontAwesome name="lock" size={inputIconSize(25)} color="#ffffff" />
                   </View>
 
                   <TextInput
@@ -190,7 +195,7 @@ export default function LoginScreen({ navigation }: Props) {
                     onFocus={handlePasswordFocus}
                     onBlur={handlePasswordBlur}
                     placeholderTextColor={
-                      touched.password && errors.password ? "#E74C3C" : "#999"
+                      touched.password && errors.password ? "#E74C3C" : (tablet ? "#58748D" : "#999")
                     }
                     onChangeText={handleChange("password")}
                     value={values.password}
@@ -206,7 +211,7 @@ export default function LoginScreen({ navigation }: Props) {
                   >
                     <Ionicons
                       name={showPassword ? "eye-off" : "eye"}
-                      size={22}
+                      size={inputIconSize(22)}
                       color="#7F8C8D"
                     />
                   </Pressable>
@@ -238,7 +243,7 @@ export default function LoginScreen({ navigation }: Props) {
           onPress={() => navigation.navigate("Cadastro")}
         >
           <View style={styles.registerButtonIcon}>
-            <FontAwesome name="user-plus" size={18} color="#FFFFFF" />
+            <FontAwesome name="user-plus" size={tablet ? 18 * metrics.contentScale : 18} color="#FFFFFF" />
           </View>
 
           <Text
@@ -267,7 +272,7 @@ export default function LoginScreen({ navigation }: Props) {
           }}
         >
           <View style={styles.demoButtonIconSlot}>
-            <FontAwesome name="rocket" size={22} color="#2B7DCD" />
+            <FontAwesome name="rocket" size={tablet ? 27 * metrics.contentScale : 22} color="#2B7DCD" />
           </View>
           <View style={styles.demoButtonTextBox}>
             <Text
@@ -280,32 +285,44 @@ export default function LoginScreen({ navigation }: Props) {
             </Text>
           </View>
         </Pressable>
-      </KeyboardAvoidingView>
+              </TabletFormScroll>
+</KeyboardAvoidingView>
         </ImageBackground>
       </Animated.View>
     </View>
   );
 }
 
-const styles = StyleSheet.create({
+function createPhoneStyles(metrics: ReturnType<typeof useSceneMetrics>) {
+  const { width, height, scale: s, moderateScale: ms } = metrics;
+
+  // RESPONSIVO
+  const FORM_TOP = s(410);
+  const REGISTER_TOP = s(635);
+  const REGISTER_WIDTH = s(267);
+  const DEMO_TOP = s(710);
+
+  return StyleSheet.create({
   screen: {
     flex: 1,
     overflow: "hidden",
   },
 
   shiftLayer: {
-    flex: 1,
+    position: "absolute",
+    top: 0,
+    left: 0,
     width,
     height,
   },
 
   background: {
-    flex: 1,
     width,
     height,
   },
 
   bgImage: {
+    ...WEB_IMAGE_FILL,
     resizeMode: "cover",
   },
 
@@ -474,13 +491,13 @@ const styles = StyleSheet.create({
   demoButton: {
     position: "absolute",
     top: DEMO_TOP + s(2),
-    width: s(236),
+    maxWidth: s(236),
     height: s(48),
     alignSelf: "center",
     alignItems: "center",
     justifyContent: "center",
     flexDirection: "row",
-    gap: s(10),
+    gap: s(6),
     backgroundColor: "#FFFFFF",
     borderRadius: s(24),
     borderWidth: 1.6,
@@ -500,7 +517,7 @@ const styles = StyleSheet.create({
   },
 
   demoButtonTextBox: {
-    flex: 1,
+    flexShrink: 1,
     minWidth: 0,
     justifyContent: "center",
   },
@@ -514,3 +531,252 @@ const styles = StyleSheet.create({
     includeFontPadding: false,
   },
 });
+}
+
+
+// Tablet-only styles. The phone styles above are preserved from the pre-tablet snapshot.
+function createTabletStyles(metrics: ReturnType<typeof useSceneMetrics>) {
+  const { width, height } = metrics;
+  const layout = getTabletAuthLayout(width, height, "login", metrics.bottomInset);
+  const unit = layout.unit;
+  const s = (value: number) => value * unit;
+  const ms = metrics.moderateScale;
+
+  // RESPONSIVO
+  const inputHeight = Math.max(56, s(62));
+  const fieldGap = s(10);
+  const registerGap = s(10);
+  const registerHeight = Math.max(52, s(48));
+  const separatorHeight = s(24);
+  const demoHeight = Math.max(56, s(56));
+  const bottomPadding = Math.max(s(24), metrics.bottomInset + 16);
+  // formStack has three children: two inputs and the primary button.
+  const groupHeight = inputHeight * 2 + fieldGap * 2 + s(68) + s(4)
+    + registerGap + registerHeight + separatorHeight + s(2) + demoHeight;
+  const formTop = layout.regionTop + Math.max(0, (layout.regionBottom - layout.regionTop - groupHeight) / 2);
+  // Space the secondary actions using the room below the existing form.
+  const extraActionGap = Math.min(s(14), Math.max(0, (height - bottomPadding - formTop - groupHeight) / 2));
+  const formWidth = layout.formWidth;
+  const REGISTER_WIDTH = s(267);
+
+  return StyleSheet.create({
+  shiftLayer: { flex: 1, width, height },
+  screen: {
+    flex: 1,
+    overflow: "hidden",
+  },
+
+  background: { flex: 1, width, height },
+
+  bgImage: {
+    width: layout.imageWidth,
+    height: layout.imageHeight,
+    left: layout.imageLeft,
+    top: layout.imageTop,
+    resizeMode: "contain",
+  },
+
+  container: {
+    flexGrow: 1,
+    minHeight: height,
+    paddingBottom: bottomPadding,
+    paddingHorizontal: (width - formWidth) / 2,
+  },
+
+  formArea: {
+    marginTop: formTop,
+    zIndex: 5,
+  },
+
+  formStack: {
+    gap: fieldGap,
+  },
+
+  inputWrapper: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#ffffff",  //#F5F7FA
+    borderRadius: inputHeight / 2,
+    paddingHorizontal: s(15),
+    height: inputHeight,
+    borderWidth: 1.2,
+    borderColor: "#2B79BE",
+    shadowColor: "#000",
+    shadowOpacity: 0.14,
+    shadowRadius: 7,
+    elevation: 4,
+  },
+
+  inputError: {
+    borderColor: "#E74C3C",
+    backgroundColor: "#FFF5F5",
+  },
+
+  iconCircle: {
+    width: s(44),
+    height: s(44),
+    borderRadius: s(22),
+    backgroundColor: "#3498DB",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
+  input: {
+    flex: 1,
+    marginLeft: s(10),
+    fontSize: ms(18),
+    fontWeight: "600",
+    color: "#194B90",
+  },
+
+  eyeButton: {
+    width: Math.max(44, s(36)),
+    height: Math.max(44, s(36)),
+    alignItems: "center",
+    justifyContent: "center",
+    zIndex: 2,
+    elevation: 2,
+  },
+
+  button: {
+    height: s(68),
+    marginTop: s(4),
+    width: s(260),
+    alignSelf: "center",
+    justifyContent: "center",
+    alignItems: "center",
+    position: "relative",
+    overflow: "hidden",
+    zIndex: 20,
+    elevation: 20,
+  },
+
+  buttonImage: {
+    width: s(290),
+    height: s(290),
+    resizeMode: "contain",
+  },
+
+  buttonText: {
+    color: "#FFF",
+    fontSize: ms(26),
+    lineHeight: ms(31),
+    marginLeft: s(10),
+    fontWeight: "bold",
+    position: "absolute",
+    width: "100%",
+    textAlign: "center",
+    includeFontPadding: false,
+  },
+
+  registerButtonArea: {
+    marginTop: registerGap + extraActionGap,
+    width: Math.min(formWidth, s(305)),
+    height: registerHeight,
+    alignSelf: "center",
+    alignItems: "center",
+    justifyContent: "center",
+    flexDirection: "row",
+    gap: s(5),
+    backgroundColor: "#FFF9E8",
+    borderRadius: s(20),
+    borderWidth: 1.3,
+    borderColor: "#F5C84B",
+    paddingHorizontal: s(14),
+    shadowColor: "#000",
+    shadowOpacity: 0.14,
+    shadowRadius: 5,
+    zIndex: 4,
+    elevation: 4,
+  },
+
+  registerButtonIcon: {
+    width: s(30),
+    height: s(30),
+    borderRadius: s(16),
+    backgroundColor: "#3498DB",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
+  registerButtonText: {
+    flex: 1,
+    minWidth: 0,
+    color: "#1B2B44",
+    fontSize: ms(16.5),
+    lineHeight: ms(21),
+    fontWeight: "800",
+    textAlign: "center",
+    includeFontPadding: false,
+  },
+
+  registerButtonHighlight: {
+    color: "#1676D2",
+  },
+
+  separatorArea: {
+    marginTop: 0,
+    width: REGISTER_WIDTH * 0.78,
+    height: separatorHeight + extraActionGap,
+    alignSelf: "center",
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
+  separatorLine: {
+    flex: 1,
+    height: 1.5,
+    backgroundColor: "#D6EAF8",
+  },
+
+  separatorText: {
+    marginHorizontal: s(12),
+    color: "#95A5A6",
+    fontWeight: "bold",
+    fontSize: ms(16),
+  },
+
+  demoButton: {
+    marginTop: s(2),
+    maxWidth: formWidth,
+    height: demoHeight,
+    alignSelf: "center",
+    alignItems: "center",
+    justifyContent: "center",
+    flexDirection: "row",
+    gap: s(7),
+    backgroundColor: "#FFFFFF",
+    borderRadius: s(24),
+    borderWidth: 1.6,
+    borderColor: "#2B79BE",
+    paddingHorizontal: s(14),
+    shadowColor: "#000",
+    shadowOpacity: 0.14,
+    shadowRadius: 7,
+    elevation: 5,
+  },
+
+  demoButtonIconSlot: {
+    width: s(30),
+    height: s(30),
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
+  demoButtonTextBox: {
+    flexShrink: 1,
+    minWidth: 0,
+    justifyContent: "center",
+  },
+
+  demoButtonText: {
+    color: "#194B90",
+    fontWeight: "900",
+    fontSize: ms(19),
+    lineHeight: ms(25),
+    textAlign: "center",
+    includeFontPadding: false,
+  },
+});
+}

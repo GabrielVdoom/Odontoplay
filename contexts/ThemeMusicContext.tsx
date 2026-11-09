@@ -23,29 +23,30 @@ export const THEME_MUSIC_DUCKED_VOLUME = 0.05;
 
 export function ThemeMusicProvider({ children }: { children: ReactNode }) {
   const soundRef = useRef<AudioPlayer | null>(null);
+  const mutedRef = useRef(false);
   const volumeRef = useRef(THEME_MUSIC_VOLUME);
   const [isPlaying, setIsPlaying] = useState(false);
 
-  const loadMusic = useCallback(async () => {
+  const loadMusic = useCallback(() => {
     if (soundRef.current) {
       return soundRef.current;
     }
 
     const sound = createAudioPlayer(require("../assets/audio/Odontoplay.mp3"));
     sound.loop = true;
-    sound.volume = volumeRef.current;
+    sound.volume = mutedRef.current ? 0 : volumeRef.current;
 
     soundRef.current = sound;
     return sound;
   }, []);
 
   const startMusic = useCallback(async () => {
-    const sound = await loadMusic();
+    const sound = loadMusic();
 
     if (!sound.playing) {
       sound.play();
-      setIsPlaying(true);
     }
+    setIsPlaying(!mutedRef.current);
   }, [loadMusic]);
 
   const stopMusic = useCallback(async () => {
@@ -56,10 +57,7 @@ export function ThemeMusicProvider({ children }: { children: ReactNode }) {
       return;
     }
 
-    if (sound.playing) {
-      sound.pause();
-    }
-
+    sound.pause();
     setIsPlaying(false);
   }, []);
 
@@ -73,20 +71,20 @@ export function ThemeMusicProvider({ children }: { children: ReactNode }) {
       return;
     }
 
-    sound.volume = nextVolume;
+    sound.volume = mutedRef.current ? 0 : nextVolume;
   }, []);
 
   const toggleMusic = useCallback(async () => {
-    const sound = await loadMusic();
+    const sound = loadMusic();
+    const muted = !mutedRef.current;
 
-    if (sound.playing) {
-      sound.pause();
-      setIsPlaying(false);
-      return;
+    // Keep the theme's playback position and mute only its own player.
+    sound.volume = muted ? 0 : volumeRef.current;
+    mutedRef.current = muted;
+    if (!muted && !sound.playing) {
+      sound.play();
     }
-
-    sound.play();
-    setIsPlaying(true);
+    setIsPlaying(!muted);
   }, [loadMusic]);
 
   useEffect(() => {

@@ -23,16 +23,7 @@ import { createUserWithEmailAndPassword, signOut } from "firebase/auth";
 import { RootStackParamList } from "../App";
 import { auth, db } from "../services/firebase";
 import { useThemeMusic } from "../contexts/ThemeMusicContext";
-import { getScreenMetrics } from "../utils/responsive";
-
-const { width, height, scale: s, moderateScale: ms } = getScreenMetrics();
-
-// RESPONSIVO
-const FORM_TOP = s(243);
-const LOGIN_BOTTOM = height * 0.16;
-const LOGIN_WIDTH = width * 0.6;
-const LOGIN_HEIGHT = 36;
-const PASSWORD_FOCUS_SHIFT = -Math.min(height * 0.2, 165);
+import { useSceneMetrics, useFormScroll, TabletFormScroll, getTabletAuthLayout, WEB_IMAGE_FILL } from "../utils/responsive";
 
 type Props = NativeStackScreenProps<RootStackParamList, "Cadastro">;
 
@@ -46,16 +37,25 @@ type CadastroValues = {
 };
 
 export default function CadastroScreen({ navigation }: Props) {
+  const metrics = useSceneMetrics();
+  const tablet = metrics.isTabletLayout;
+  const styles = tablet ? createTabletStyles(metrics) : createPhoneStyles(metrics);
+  const formScroll = useFormScroll(tablet);
+  const inputIconSize = (value: number) => tablet ? Math.round(value * Math.min(1.25 * metrics.contentScale, metrics.scale(1))) : value;
+  const { height, moderateScale: ms } = metrics;
+  const PASSWORD_FOCUS_SHIFT = -Math.min(height * 0.2, 165);
+
   const [showPassword, setShowPassword] = useState(false);
   const [generoModal, setGeneroModal] = useState(false);
   const [showSenhaSubmitError, setShowSenhaSubmitError] = useState(false);
   const { stopMusic } = useThemeMusic();
   const screenShift = useRef(new Animated.Value(0)).current;
   const passwordFocusedRef = useRef(false);
-  const birthYearInputRef = useRef<TextInput>(null);
-  const emailInputRef = useRef<TextInput>(null);
-  const passwordInputRef = useRef<TextInput>(null);
-  const confirmPasswordInputRef = useRef<TextInput>(null);
+  const tabletNameRef = useRef<React.ComponentRef<typeof TextInput>>(null);
+  const birthYearInputRef = useRef<React.ComponentRef<typeof TextInput>>(null);
+  const emailInputRef = useRef<React.ComponentRef<typeof TextInput>>(null);
+  const passwordInputRef = useRef<React.ComponentRef<typeof TextInput>>(null);
+  const confirmPasswordInputRef = useRef<React.ComponentRef<typeof TextInput>>(null);
   const focusEmailAfterGenderRef = useRef(false);
 
   const focusEmailAfterGender = () => {
@@ -192,7 +192,8 @@ export default function CadastroScreen({ navigation }: Props) {
 
   const handlePasswordFocus = () => {
     passwordFocusedRef.current = true;
-    animateScreenShift(PASSWORD_FOCUS_SHIFT);
+    if (tablet) formScroll.onFocus(passwordInputRef.current);
+    else animateScreenShift(PASSWORD_FOCUS_SHIFT);
   };
 
   const handlePasswordBlur = () => {
@@ -211,14 +212,16 @@ export default function CadastroScreen({ navigation }: Props) {
         ]}
       >
         <ImageBackground
-          source={require("../assets/cadastro/background_frutiger6.png")}
+          source={tablet ? require("../assets/cadastro/background_cadastro_tablet.png") : require("../assets/cadastro/background_frutiger6.png")}
           style={styles.background}
           imageStyle={styles.bgImage}
         >
       <KeyboardAvoidingView
-        style={styles.container}
+        style={tablet ? { flex: 1 } : styles.container}
         behavior={Platform.OS === "ios" ? "padding" : undefined}
       >
+        <TabletFormScroll enabled={tablet} scroll={formScroll} style={styles.container}>
+
         <View style={styles.formArea}>
           <Formik
             initialValues={{
@@ -260,18 +263,20 @@ export default function CadastroScreen({ navigation }: Props) {
                         ]}
                       >
                         <View style={iconCircleStyle}>
-                          <FontAwesome name="child" size={22} color="#ffffff" />
+                          <FontAwesome name="child" size={inputIconSize(22)} color="#ffffff" />
                         </View>
 
                         <TextInput
                           style={styles.input}
+                          ref={tablet ? tabletNameRef : undefined}
+                          onFocus={tablet ? () => formScroll.onFocus(tabletNameRef.current) : undefined}
                           placeholder={
                             touched.nome && errors.nome
                               ? errors.nome
                               : "Nome da criança"
                           }
                           placeholderTextColor={
-                            touched.nome && errors.nome ? "#E74C3C" : "#999"
+                            touched.nome && errors.nome ? "#E74C3C" : (tablet ? "#58748D" : "#999")
                           }
                           onChangeText={handleChange("nome")}
                           value={values.nome}
@@ -292,7 +297,7 @@ export default function CadastroScreen({ navigation }: Props) {
                         <View style={iconCircleStyle}>
                           <FontAwesome
                             name="birthday-cake"
-                            size={19}
+                            size={inputIconSize(19)}
                             color="#ffffff"
                           />
                         </View>
@@ -307,7 +312,7 @@ export default function CadastroScreen({ navigation }: Props) {
                           placeholderTextColor={
                             touched.dataNascimento && errors.dataNascimento
                               ? "#E74C3C"
-                              : "#999"
+                              : (tablet ? "#58748D" : "#999")
                           }
                           keyboardType="numeric"
                           maxLength={4}
@@ -316,6 +321,7 @@ export default function CadastroScreen({ navigation }: Props) {
                           }
                           value={values.dataNascimento}
                           ref={birthYearInputRef}
+                          onFocus={tablet ? () => formScroll.onFocus(birthYearInputRef.current) : undefined}
                           returnKeyType="next"
                           submitBehavior="submit"
                           onSubmitEditing={() => {
@@ -337,7 +343,7 @@ export default function CadastroScreen({ navigation }: Props) {
                         <View style={iconCircleStyle}>
                           <FontAwesome
                             name="venus-mars"
-                            size={19}
+                            size={inputIconSize(19)}
                             color="#ffffff"
                           />
                         </View>
@@ -355,9 +361,10 @@ export default function CadastroScreen({ navigation }: Props) {
                                 touched.genero && errors.genero
                                   ? "#E74C3C"
                                   : values.genero
-                                  ? "#333"
-                                  : "#999",
-                              fontSize: ms(15),
+                                  ? (tablet ? "#194B90" : "#333")
+                                  : (tablet ? "#58748D" : "#999"),
+                              fontSize: ms(tablet ? 18 : 15),
+                              fontWeight: tablet ? "600" : undefined,
                             }}
                           >
                             {touched.genero && errors.genero
@@ -376,7 +383,7 @@ export default function CadastroScreen({ navigation }: Props) {
                         <View style={iconCircleStyle}>
                           <FontAwesome
                             name="envelope"
-                            size={19}
+                            size={inputIconSize(19)}
                             color="#ffffff"
                           />
                         </View>
@@ -389,13 +396,14 @@ export default function CadastroScreen({ navigation }: Props) {
                               : "Email do responsável"
                           }
                           placeholderTextColor={
-                            touched.email && errors.email ? "#E74C3C" : "#999"
+                            touched.email && errors.email ? "#E74C3C" : (tablet ? "#58748D" : "#999")
                           }
                           keyboardType="email-address"
                           autoCapitalize="none"
                           onChangeText={handleChange("email")}
                           value={values.email}
                           ref={emailInputRef}
+                          onFocus={tablet ? () => formScroll.onFocus(emailInputRef.current) : undefined}
                           returnKeyType="next"
                           submitBehavior="submit"
                           onSubmitEditing={() => passwordInputRef.current?.focus()}
@@ -411,7 +419,7 @@ export default function CadastroScreen({ navigation }: Props) {
                         ]}
                       >
                         <View style={iconCircleStyle}>
-                          <FontAwesome name="lock" size={20} color="#ffffff" />
+                          <FontAwesome name="lock" size={inputIconSize(20)} color="#ffffff" />
                         </View>
 
                         <View style={styles.inputFieldArea}>
@@ -430,7 +438,7 @@ export default function CadastroScreen({ navigation }: Props) {
                             placeholderTextColor={
                               showSenhaSubmitError && errors.senha
                                 ? "#E74C3C"
-                                : "#999"
+                                : (tablet ? "#58748D" : "#999")
                             }
                             secureTextEntry={!showPassword}
                             onFocus={handlePasswordFocus}
@@ -454,7 +462,7 @@ export default function CadastroScreen({ navigation }: Props) {
                         >
                           <Ionicons
                             name={showPassword ? "eye-off" : "eye"}
-                            size={22}
+                            size={inputIconSize(22)}
                             color="#7F8C8D"
                           />
                         </Pressable>
@@ -469,7 +477,7 @@ export default function CadastroScreen({ navigation }: Props) {
                         ]}
                       >
                         <View style={iconCircleStyle}>
-                          <FontAwesome name="lock" size={20} color="#ffffff" />
+                          <FontAwesome name="lock" size={inputIconSize(20)} color="#ffffff" />
                         </View>
 
                         <View style={styles.inputFieldArea}>
@@ -490,10 +498,10 @@ export default function CadastroScreen({ navigation }: Props) {
                             placeholderTextColor={
                               showSenhaSubmitError && errors.confirmaSenha
                                 ? "#E74C3C"
-                                : "#999"
+                                : (tablet ? "#58748D" : "#999")
                             }
                             secureTextEntry={!showPassword}
-                            onFocus={handlePasswordFocus}
+                            onFocus={tablet ? () => formScroll.onFocus(confirmPasswordInputRef.current) : handlePasswordFocus}
                             onBlur={handlePasswordBlur}
                             onChangeText={(text) => {
                               setShowSenhaSubmitError(false);
@@ -514,7 +522,7 @@ export default function CadastroScreen({ navigation }: Props) {
                         >
                           <Ionicons
                             name={showPassword ? "eye-off" : "eye"}
-                            size={22}
+                            size={inputIconSize(22)}
                             color="#7F8C8D"
                           />
                         </Pressable>
@@ -598,7 +606,7 @@ export default function CadastroScreen({ navigation }: Props) {
           
 
           <View style={styles.loginButtonIcon}>
-            <Ionicons name="log-in-outline" size={21} color="#FFFFFF" />
+            <Ionicons name="log-in-outline" size={tablet ? 21 * metrics.contentScale : 21} color="#FFFFFF" />
           </View>
 
           <Text
@@ -612,32 +620,46 @@ export default function CadastroScreen({ navigation }: Props) {
           </Text>
             
         </Pressable>
-      </KeyboardAvoidingView>
+              </TabletFormScroll>
+</KeyboardAvoidingView>
         </ImageBackground>
       </Animated.View>
     </View>
   );
 }
 
-const styles = StyleSheet.create({
+function createPhoneStyles(metrics: ReturnType<typeof useSceneMetrics>) {
+  const { width, height, scale: s, moderateScale: ms } = metrics;
+
+  // RESPONSIVO
+  const FORM_TOP = s(220);
+  // Distância do início do formulário até o botão "Ir para Login".
+  // Diminua 475 para subir o botão; aumente para descer.
+  const LOGIN_TOP = FORM_TOP + s(475);
+  const LOGIN_WIDTH = s(236);
+  const LOGIN_HEIGHT = s(36);
+
+  return StyleSheet.create({
   screen: {
     flex: 1,
     overflow: "hidden",
   },
 
   shiftLayer: {
-    flex: 1,
+    position: "absolute",
+    top: 0,
+    left: 0,
     width,
     height,
   },
 
   background: {
-    flex: 1,
     width,
     height,
   },
 
   bgImage: {
+    ...WEB_IMAGE_FILL,
     resizeMode: "cover",
   },
 
@@ -756,7 +778,7 @@ const styles = StyleSheet.create({
 
   loginButtonArea: {
     position: "absolute",
-    bottom: LOGIN_BOTTOM -40,
+    top: LOGIN_TOP,
     alignSelf: "center",
     width: LOGIN_WIDTH ,
     height: LOGIN_HEIGHT + 2,
@@ -834,3 +856,238 @@ const styles = StyleSheet.create({
     padding: 10,
   },
 });
+}
+
+
+// Tablet-only styles. The phone styles above are preserved from the pre-tablet snapshot.
+function createTabletStyles(metrics: ReturnType<typeof useSceneMetrics>) {
+  const { width, height } = metrics;
+  const layout = getTabletAuthLayout(width, height, "cadastro", metrics.bottomInset);
+  const unit = layout.unit;
+  const s = (value: number) => value * unit;
+  const ms = metrics.moderateScale;
+
+  // RESPONSIVO
+  const formTop = layout.regionTop + s(8);
+  const formWidth = layout.formWidth;
+  const LOGIN_WIDTH = Math.min(formWidth, Math.max(s(280), 280));
+  const LOGIN_HEIGHT = s(36);
+  const inputHeight = Math.max(56, s(62));
+  const bottomPadding = Math.max(s(24), metrics.bottomInset + 16);
+  const verticalGap = Math.max(4, Math.min(24,
+    (layout.regionBottom - formTop - inputHeight * 6 - s(68) - s(10) - Math.max(48, LOGIN_HEIGHT + 2)) / 7));
+
+  return StyleSheet.create({
+  shiftLayer: { flex: 1, width, height },
+  screen: {
+    flex: 1,
+    overflow: "hidden",
+  },
+
+  background: { flex: 1, width, height },
+
+  bgImage: {
+    width: layout.imageWidth,
+    height: layout.imageHeight,
+    left: layout.imageLeft,
+    top: layout.imageTop,
+    resizeMode: "contain",
+  },
+
+  container: {
+    flexGrow: 1,
+    minHeight: height,
+    paddingBottom: bottomPadding,
+    paddingHorizontal: (width - formWidth) / 2,
+  },
+
+  formArea: {
+    width: "100%",
+    marginTop: formTop,
+  },
+
+  formStack: {
+    gap: verticalGap,
+  },
+
+  inputWrapper: {
+    left: s(1),
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#ffffff",
+    borderRadius: inputHeight / 2,
+    paddingHorizontal: s(15),
+    height: inputHeight, //estava em 45 antes da mudança do formulário
+    borderWidth: 1.2,
+    borderColor: "#2B79BE",
+    shadowColor: "#000",
+    shadowOpacity: 0.14,
+    shadowRadius: 7,
+    elevation: 4,
+  },
+
+  inputError: {
+    borderColor: "#E74C3C",
+    backgroundColor: "#FFF5F5",
+  },
+
+  iconCircle: {
+    width: s(44),
+    height: s(44),
+    borderRadius: s(22),
+    backgroundColor: "#3498DB",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
+  iconCircleFemale: {
+    backgroundColor: "#fd92c7",
+  },
+
+  input: {
+    flex: 1,
+    marginLeft: s(10),
+    fontSize: ms(18),
+    fontWeight: "600",
+    color: "#194B90",
+  },
+
+  inputFieldArea: {
+    flex: 1,
+    justifyContent: "center",
+    marginLeft: s(10),
+    height: "100%",
+  },
+
+  passwordInput: {
+    marginLeft: 0,
+    height: "100%",
+    paddingVertical: 0,
+    textAlignVertical: "center",
+  },
+
+  eyeButton: {
+    width: Math.max(44, s(35)),
+    height: Math.max(44, s(35)),
+    alignItems: "center",
+    justifyContent: "center",
+    zIndex: 2,
+    elevation: 2,
+  },
+
+  button: {
+    height: s(68),
+    marginTop: s(10),
+    width: s(260),
+    alignSelf: "center",
+    justifyContent: "center",
+    alignItems: "center",
+    position: "relative",
+    overflow: "hidden",
+    zIndex: 10,
+  },
+
+  cadastrarButton: {
+    transform: [{ translateX: 0 }, { translateY: 0 }],
+  },
+
+  buttonImage: {
+    width: s(270),
+    height: s(270),
+    resizeMode: "contain",
+  },
+
+  buttonText: {
+    color: "#FFF",
+    fontSize: ms(26),
+    lineHeight: ms(31),
+    marginLeft: s(10),
+    marginBottom: s(5),
+    fontWeight: "bold",
+    position: "absolute",
+    width: "100%",
+    textAlign: "center",
+    includeFontPadding: false,
+  },
+
+  loginButtonArea: {
+    marginTop: verticalGap,
+    alignSelf: "center",
+    width: LOGIN_WIDTH ,
+    height: Math.max(48, LOGIN_HEIGHT + 2),
+    alignItems: "center",
+    justifyContent: "center",
+    flexDirection: "row",
+    gap: 10,
+    backgroundColor: "#FFF9E8",
+    borderRadius: 20,
+    borderWidth: 1.3,
+    borderColor: "#ffd76a",
+    paddingHorizontal: 14,
+    shadowColor: "#000",
+    shadowOpacity: 0.14,
+    shadowRadius: 5,
+    elevation: 4,
+  },
+
+  loginButtonIcon: {
+    width: 28,
+    height: 28,
+    borderRadius: 15,
+    backgroundColor: "#3498DB",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
+  loginButtonText: {
+    flex: 1,
+    minWidth: 0,
+    color: "#1B2B44",
+    fontSize: ms(16.5),
+    lineHeight: ms(21),
+    fontWeight: "800",
+    textAlign: "center",
+    includeFontPadding: false,
+  },
+
+  loginButtonHighlight: {
+    color: "#1676D2",
+    fontStyle: "italic",
+  },
+
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.4)",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+
+  modalBox: {
+    width: "80%",
+    maxWidth: 420,
+    backgroundColor: "#FFF",
+    borderRadius: 20,
+    padding: 20,
+    alignItems: "center",
+  },
+
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: "bold",
+    marginBottom: 15,
+  },
+
+  modalOption: {
+    width: "100%",
+    padding: 12,
+    borderBottomWidth: 1,
+    borderColor: "#EEE",
+    alignItems: "center",
+  },
+
+  modalCancel: {
+    marginTop: 10,
+    padding: 10,
+  },
+});
+}
