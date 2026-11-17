@@ -1649,6 +1649,7 @@ function FinalScreen(props: React.ComponentProps<typeof FinalContent>) {
 
 function createFinalStyles(metrics: ReturnType<typeof useSceneMetrics>, topInset: number) {
   const { scale: s, moderateScale: ms } = metrics;
+  const buttonScale = 0.95;
   return StyleSheet.create({
   finalContainer: {
     flex: 1,
@@ -1733,8 +1734,8 @@ function createFinalStyles(metrics: ReturnType<typeof useSceneMetrics>, topInset
   },
 
   retryButton: {
-    width: s(260),
-    height: s(74),
+    width: s(260 * buttonScale),
+    height: s(74 * buttonScale),
     resizeMode: "contain",
   },
 
@@ -1750,8 +1751,8 @@ function createFinalStyles(metrics: ReturnType<typeof useSceneMetrics>, topInset
   },
 
   sairButton: {
-    width: s(198),
-    height: s(66),
+    width: s(198 * buttonScale),
+    height: s(66 * buttonScale),
     resizeMode: "contain",
   },
 
@@ -1909,7 +1910,7 @@ const { scale: s, moderateScale: ms, backgroundHeight } = metrics;
 const layout = getTabletActivityLayout(metrics.width, metrics.height, metrics.bottomInset);
 const characterTop = Math.max(metrics.topInset + s(52), metrics.height * 0.10);
 const portraitWidth = Math.min(1, Math.max(0, (metrics.width / metrics.height - 5 / 8) / 0.07));
-const characterLift = character === "menina" ? s(12 + 48 * portraitWidth) : 0;
+const characterLift = character === "menina" ? s(12 + 48 * portraitWidth) : character === "menino" ? s(32) : 0;
 const characterHeight = Math.min(metrics.height * 0.80 * metrics.contentScale,
   metrics.height - characterTop - metrics.bottomInset, s(760));
 const characterWidth = characterHeight * 345 / 610;
