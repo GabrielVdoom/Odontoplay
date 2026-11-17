@@ -400,7 +400,7 @@ function createPhoneStyles(metrics: ReturnType<typeof useSceneMetrics>, topInset
   },
   logoArea: {
     position: "absolute",
-    top: s(-130),
+    top: s(-145),
     left: s(36),
     right: s(36),
     height: s(805),
